@@ -19,7 +19,7 @@ const projects: Project[] = [
     description: "A DevSecOps assistant that helps developers shift security left across the pipeline.",
     long: "AegisStack is a DevSecOps assistant focused on baking security into every stage of the software delivery pipeline — dependency scanning, secret detection, container hardening checks, and policy-as-code guidance. Designed to give developers actionable, contextual security feedback without slowing them down.",
     stack: ["Python", "Docker", "K8s", "DevSecOps"],
-    github: "https://github.com/divyanshakya966",
+    github: "https://github.com/divyanshakya966/AegisStack",
   },
   {
     title: "Discord AI ChatBot",
@@ -27,7 +27,7 @@ const projects: Project[] = [
     description: "Multipurpose Discord bot with AI chat, moderation utilities and server commands.",
     long: "A multipurpose Discord bot built with Node.js — AI-powered conversational responses, slash commands, moderation utilities, and quality-of-life server tools. Modular command architecture, easy to extend.",
     stack: ["Node.js", "TypeScript", "discord.js", "OpenAI"],
-    github: "https://github.com/divyanshakya966",
+    github: "https://github.com/divyanshakya966/Discord-Bot",
   },
   {
     title: "SmartCampus",
@@ -35,7 +35,7 @@ const projects: Project[] = [
     description: "A campus marketplace where students can buy, sell and exchange items safely.",
     long: "SmartCampus is a closed-campus marketplace: verified student accounts, listings with images, chat, and a clean mobile-first UX. Built to solve a real problem on my own campus — secure, simple, and fast.",
     stack: ["Node.js", "Express", "MongoDB", "React"],
-    github: "https://github.com/divyanshakya966",
+    github: "https://github.com/divyanshakya966/SmartCampus",
   },
   {
     title: "Telegram Mod Bot",
@@ -43,7 +43,7 @@ const projects: Project[] = [
     description: "Group moderation bot for Telegram — anti-spam, warnings, and admin tooling.",
     long: "A Telegram group moderation bot covering anti-spam filters, warning/ban systems, welcome flows, and admin utilities. Lightweight, configurable, and easy to self-host.",
     stack: ["Python", "python-telegram-bot", "Docker"],
-    github: "https://github.com/divyanshakya966",
+    github: "https://github.com/divyanshakya966/Telegram-Bot",
   },
 ];
 

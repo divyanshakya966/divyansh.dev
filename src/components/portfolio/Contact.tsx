@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Section } from "./Section";
-import { Github, Linkedin, Mail, Send, Download } from "lucide-react";
+import { ArrowUpRight, Github, Linkedin, Mail, Send } from "lucide-react";
 import { toast } from "sonner";
 
 export function Contact() {
@@ -53,10 +53,12 @@ export function Contact() {
               <Send size={15} /> {sending ? "Sending..." : "Send message"}
             </button>
             <a
-              href="/resume.pdf"
+              href="/resume/resume.pdf"
+              target="_blank"
+              rel="noreferrer noopener"
               className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium glass hover:bg-muted"
             >
-              <Download size={15} /> Resume
+              <ArrowUpRight size={15} /> Resume
             </a>
           </div>
         </form>
