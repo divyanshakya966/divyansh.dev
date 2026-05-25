@@ -2,18 +2,20 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUpRight } from "lucide-react";
 
 const ROLES = [
-  "Aspiring Security Engineer",
+  "Cybersecurity Trainee",
   "DevSecOps Practitioner",
   "AI & Cloud Security",
   "Linux & Open Source",
 ];
 
-function useTyping() {
+function useTyping(enabled: boolean) {
   const [i, setI] = useState(0);
   const [text, setText] = useState("");
   const [del, setDel] = useState(false);
 
   useEffect(() => {
+    if (!enabled) return;
+
     const current = ROLES[i];
     const speed = del ? 35 : 65;
     const t = setTimeout(() => {
@@ -31,14 +33,14 @@ function useTyping() {
       }
     }, speed);
     return () => clearTimeout(t);
-  }, [text, del, i]);
+  }, [text, del, i, enabled]);
 
   return text;
 }
 
-function CharSplit({ text, delayBase = 0 }: { text: string; delayBase?: number }) {
+function CharSplit({ text, delayBase = 0, play = true }: { text: string; delayBase?: number; play?: boolean }) {
   return (
-    <span className="char-rise inline-block">
+    <span className={play ? "char-rise inline-flex items-center gap-[0.08em] sm:gap-[0.1em] md:gap-[0.06em] whitespace-nowrap" : "inline-flex items-center gap-[0.08em] sm:gap-[0.1em] md:gap-[0.06em] whitespace-nowrap"}>
       {text.split("").map((c, i) => (
         <span key={i} style={{ animationDelay: `${delayBase + i * 40}ms` }}>
           {c === " " ? "\u00A0" : c}
@@ -48,8 +50,8 @@ function CharSplit({ text, delayBase = 0 }: { text: string; delayBase?: number }
   );
 }
 
-export function Hero() {
-  const typed = useTyping();
+export function Hero({ booted }: { booted: boolean }) {
+  const typed = useTyping(booted);
   const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
@@ -79,32 +81,32 @@ export function Hero() {
             <span className="absolute inline-flex h-full w-full rounded-full bg-foreground opacity-60 animate-ping" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-foreground" />
           </span>
-          <span>open_to_work</span>
+          <span>Learning & Training</span>
         </div>
       </div>
 
       {/* Centerpiece */}
       <div
-        className="relative px-4 sm:px-6 text-center will-change-transform"
+        className={`relative px-4 sm:px-6 text-center will-change-transform transition-opacity duration-700 ${
+          booted ? "opacity-100" : "opacity-0"
+        }`}
         style={{
           opacity: heroOpacity,
           transform: `translateY(${-parallaxY}px) scale(${heroScale})`,
         }}
       >
-        <div className="font-mono text-[10px] sm:text-xs uppercase tracking-[0.5em] text-muted-foreground mb-8 animate-fade-in">
-          [ B.Tech CSE · Cybersecurity ]
+        <div className={`font-mono text-[10px] sm:text-xs uppercase tracking-[0.5em] text-muted-foreground mb-8 ${booted ? "animate-fade-in" : "opacity-0"}`}>
+          [ Aspiring Security Engineer ]
         </div>
 
-        <h1 className="font-bold tracking-[-0.04em] leading-[0.85] text-[18vw] sm:text-[14vw] md:text-[12vw] lg:text-[11rem]">
-          <CharSplit text="DIVYANSH" />
+        <h1 className="font-bold tracking-normal leading-[1] text-[14vw] sm:text-[12vw] md:text-[10vw] lg:text-[8rem]">
+          <CharSplit text="Hey there!" play={booted} />
         </h1>
-        <h1
-          className="font-bold tracking-[-0.04em] leading-[0.85] text-[18vw] sm:text-[14vw] md:text-[12vw] lg:text-[11rem] text-outline mt-1"
-        >
-          <CharSplit text="SHAKYA" delayBase={400} />
+        <h1 className={`font-bold tracking-normal leading-[1] text-[14vw] sm:text-[12vw] md:text-[10vw] lg:text-[8rem] text-outline mt-6 ${booted ? "animate-fade-in" : "opacity-0"}`}>
+          <CharSplit text="I'm Divyansh" delayBase={400} play={booted} />
         </h1>
 
-        <div className="mt-10 font-mono text-sm sm:text-base text-muted-foreground animate-fade-in [animation-delay:1100ms]">
+        <div className={`mt-10 font-mono text-sm sm:text-base text-muted-foreground ${booted ? "animate-fade-in [animation-delay:1100ms]" : "opacity-0"}`}>
           <span className="text-foreground">~/</span>
           <span>{typed}</span>
           <span className="inline-block w-[8px] h-4 bg-foreground align-middle ml-1 animate-blink" />
@@ -114,7 +116,7 @@ export function Hero() {
       {/* Bottom row */}
       <div className="absolute bottom-12 inset-x-0 px-6 sm:px-12">
         <div className="mx-auto max-w-6xl flex flex-col sm:flex-row items-center sm:items-end justify-between gap-6">
-          <div className="font-mono text-xs text-muted-foreground max-w-xs text-center sm:text-left animate-fade-in [animation-delay:1300ms]">
+          <div className={`font-mono text-xs text-muted-foreground max-w-xs text-center sm:text-left ${booted ? "animate-fade-in [animation-delay:1300ms]" : "opacity-0"}`}>
             Building secure, scalable systems
             <br />
             — DevSecOps · Linux · Cloud.
@@ -122,14 +124,14 @@ export function Hero() {
 
           <a
             href="#projects"
-            className="group inline-flex items-center gap-3 font-mono text-xs uppercase tracking-[0.3em] text-foreground animate-fade-in [animation-delay:1400ms]"
+            className={`group inline-flex items-center gap-3 font-mono text-xs uppercase tracking-[0.3em] text-foreground ${booted ? "animate-fade-in [animation-delay:1400ms]" : "opacity-0"}`}
           >
             <span className="h-px w-12 bg-foreground/40 group-hover:w-20 transition-all duration-500" />
             View Work
             <ArrowUpRight size={14} className="transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
           </a>
 
-          <div className="font-mono text-xs text-muted-foreground text-center sm:text-right animate-fade-in [animation-delay:1500ms]">
+          <div className={`font-mono text-xs text-muted-foreground text-center sm:text-right ${booted ? "animate-fade-in [animation-delay:1500ms]" : "opacity-0"}`}>
             Bhopal, India · Open to
             <br />
             internships & hackathons

@@ -35,15 +35,16 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  useReveal();
-  const [booted, setBooted] = useState(false);
+  const [bootClosing, setBootClosing] = useState(false);
+  const [bootDone, setBootDone] = useState(false);
+  useReveal(bootClosing);
   return (
     <main className="relative min-h-screen">
       <BackgroundFX />
       <Cursor />
-      {!booted && <IntroBoot onDone={() => setBooted(true)} />}
+      {!bootDone && <IntroBoot onCloseStart={() => setBootClosing(true)} onDone={() => setBootDone(true)} />}
       <Nav />
-      <Hero />
+      <Hero booted={bootClosing} />
       <About />
       <Skills />
       <Projects />

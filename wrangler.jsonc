@@ -1,7 +1,22 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "portfolio",
-  "compatibility_date": "2025-09-24",
-  "compatibility_flags": ["nodejs_compat"],
-  "main": "src/server.ts",
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "portfolio",
+	"compatibility_date": "2025-09-24",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"main": "src/server.ts",
+	"routes": [
+		{
+			"pattern": "gohack.xyz",
+			"zone_name": "gohack.xyz",
+			"custom_domain": true,
+			"enabled": true,
+			"previews_enabled": false
+		}
+	],
+	"vars": {
+		"CONTACT_RATE_LIMIT_MAX": "5",
+		"CONTACT_RATE_LIMIT_WINDOW_MS": "600000"
+	},
 }

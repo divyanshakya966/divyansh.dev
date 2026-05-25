@@ -9,7 +9,7 @@ const LINES = [
   { p: "$", t: "./portfolio --launch" },
 ];
 
-export function IntroBoot({ onDone }: { onDone: () => void }) {
+export function IntroBoot({ onCloseStart, onDone }: { onCloseStart: () => void; onDone: () => void }) {
   const [step, setStep] = useState(0);
   const [typed, setTyped] = useState("");
   const [done, setDone] = useState(false);
@@ -20,6 +20,7 @@ export function IntroBoot({ onDone }: { onDone: () => void }) {
     if (step >= LINES.length) {
       const t = setTimeout(() => {
         setClosing(true);
+        onCloseStart();
         setTimeout(() => {
           setDone(true);
           onDone();

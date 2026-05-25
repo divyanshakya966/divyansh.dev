@@ -41,6 +41,7 @@ export function BackgroundFX() {
       // fade trail
       ctx.fillStyle = "rgba(8, 8, 10, 0.08)";
       ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
       ctx.font = `${fontSize}px JetBrains Mono, ui-monospace, monospace`;
 
       for (let i = 0; i < drops.length; i++) {
@@ -113,6 +114,7 @@ export function BackgroundFX() {
         <div ref={auroraRef} className="absolute inset-0 transition-[background] duration-300" />
         {/* vignette to focus center */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_25%,var(--background)_92%)]" />
+        <div className="absolute inset-0 portfolio-light-vignette" />
         {/* texture */}
         <div className="absolute inset-0 noise-overlay" />
         <div className="absolute inset-0 scanlines-overlay" />

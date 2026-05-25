@@ -1,5 +1,5 @@
 export const THEME_KEY = "ds-theme";
-export type Theme = "dark" | "light";
+export type Theme = "dark";
 
 export function applyTheme(theme: Theme) {
   if (typeof document === "undefined") return;
@@ -10,6 +10,6 @@ export function applyTheme(theme: Theme) {
 
 export function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "dark";
-  const saved = localStorage.getItem(THEME_KEY) as Theme | null;
-  return saved ?? "dark";
+  localStorage.removeItem(THEME_KEY);
+  return "dark";
 }

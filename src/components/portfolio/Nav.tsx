@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Moon, Sun, Menu, X } from "lucide-react";
-import { applyTheme, getInitialTheme, THEME_KEY, type Theme } from "@/lib/theme";
+import { Menu, X, Github, Linkedin } from "lucide-react";
+import { applyTheme, getInitialTheme } from "@/lib/theme";
 
 const links = [
   { href: "#about", label: "About" },
@@ -12,15 +12,12 @@ const links = [
 ];
 
 export function Nav() {
-  const [theme, setTheme] = useState<Theme>("dark");
   const [active, setActive] = useState("");
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const t = getInitialTheme();
-    setTheme(t);
-    applyTheme(t);
+    applyTheme(getInitialTheme());
   }, []);
 
   useEffect(() => {
@@ -46,13 +43,6 @@ export function Nav() {
     sections.forEach((s) => io.observe(s));
     return () => io.disconnect();
   }, []);
-
-  const toggle = () => {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    applyTheme(next);
-    localStorage.setItem(THEME_KEY, next);
-  };
 
   return (
     <header
@@ -91,13 +81,26 @@ export function Nav() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={toggle}
-              aria-label="Toggle theme"
-              className="grid place-items-center h-9 w-9 rounded-lg glass hover:shadow-glow transition-all"
+            <a
+              href="https://github.com/divyanshakya966"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="GitHub"
+              className="hidden md:inline-flex items-center justify-center h-9 w-9 rounded-lg bg-transparent text-muted-foreground hover:text-foreground hover:bg-foreground/6 transition"
             >
-              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
+              <Github size={16} />
+            </a>
+
+            <a
+              href="https://linkedin.com/in/divyanshakya966"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="LinkedIn"
+              className="hidden md:inline-flex items-center justify-center h-9 w-9 rounded-lg bg-transparent text-muted-foreground hover:text-foreground hover:bg-foreground/6 transition"
+            >
+              <Linkedin size={16} />
+            </a>
+
             <button
               className="md:hidden grid place-items-center h-9 w-9 rounded-lg glass"
               onClick={() => setOpen((v) => !v)}

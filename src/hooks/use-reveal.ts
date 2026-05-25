@@ -10,8 +10,10 @@ import { useEffect } from "react";
  *   <div className="reveal" data-reveal="blur" />
  *   <div className="reveal-stagger">               -> children .reveal animate with auto delay
  */
-export function useReveal() {
+export function useReveal(enabled = true) {
   useEffect(() => {
+    if (!enabled) return;
+
     // assign stagger delays
     document.querySelectorAll<HTMLElement>(".reveal-stagger").forEach((parent) => {
       const kids = parent.querySelectorAll<HTMLElement>(":scope > .reveal, :scope .reveal-child");
@@ -34,5 +36,5 @@ export function useReveal() {
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, []);
+  }, [enabled]);
 }
