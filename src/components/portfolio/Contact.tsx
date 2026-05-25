@@ -6,14 +6,37 @@ import { toast } from "sonner";
 export function Contact() {
   const [sending, setSending] = useState(false);
 
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+
+    const payload = {
+      name: String(formData.get("name") ?? "").trim(),
+      email: String(formData.get("email") ?? "").trim(),
+      message: String(formData.get("message") ?? "").trim(),
+      company: String(formData.get("company") ?? "").trim(),
+    };
+
     setSending(true);
-    setTimeout(() => {
-      setSending(false);
-      (e.target as HTMLFormElement).reset();
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to send message right now");
+      }
+
+      form.reset();
       toast.success("Message sent — I'll get back to you soon.");
-    }, 700);
+    } catch {
+      toast.error("Couldn't send message. Please try again in a moment.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -44,6 +67,14 @@ export function Contact() {
               placeholder="Tell me about the role, hackathon, or project..."
             />
           </div>
+          <input
+            type="text"
+            name="company"
+            tabIndex={-1}
+            autoComplete="off"
+            className="hidden"
+            aria-hidden="true"
+          />
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               type="submit"
