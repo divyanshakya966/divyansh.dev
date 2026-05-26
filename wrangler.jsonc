@@ -10,13 +10,11 @@
 		{
 			"pattern": "gohack.xyz",
 			"zone_name": "gohack.xyz",
-			"custom_domain": true,
-			"enabled": true,
-			"previews_enabled": false
+			"custom_domain": true
 		}
 	],
 	"vars": {
 		"CONTACT_RATE_LIMIT_MAX": "5",
 		"CONTACT_RATE_LIMIT_WINDOW_MS": "600000"
-	},
+	}
 }
