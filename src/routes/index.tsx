@@ -19,16 +19,15 @@ import { useReveal } from "@/hooks/use-reveal";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Divyansh Shakya — Cybersecurity Student & Developer" },
+      { title: "Divyansh Shakya | Cybersecurity Student & Developer" },
       {
         name: "description",
         content:
-          "Portfolio of Divyansh Shakya — B.Tech CSE (Cybersecurity) student focused on Linux, low-level systems, ethical hacking and full-stack web development.",
+          "Portfolio of Divyansh Shakya — B.Tech CSE (Cybersecurity) student focused on AI & Cloud Security, ethical hacking and full-stack web development.",
       },
-      { property: "og:title", content: "Divyansh Shakya — Cybersecurity Student & Developer" },
-      { property: "og:description", content: "Cybersecurity, Linux, and full-stack — projects, hackathons and open source." },
+      { property: "og:title", content: "Divyansh Shakya | Cybersecurity Student & Developer" },
+      { property: "og:description", content: "Cybersecurity, Cloud, and full-stack — projects, hackathons and open source." },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Index,
