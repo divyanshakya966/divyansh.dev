@@ -53,6 +53,39 @@ function CharSplit({ text, delayBase = 0, play = true }: { text: string; delayBa
 export function Hero({ booted }: { booted: boolean }) {
   const typed = useTyping(booted);
   const [scrollY, setScrollY] = useState(0);
+  const [isGlitching, setIsGlitching] = useState(false);
+
+  useEffect(() => {
+    if (!booted) return;
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const runGlitchCycle = () => {
+      // Wait a random interval between 3 to 7 seconds before triggering a burst
+      const nextDelay = 3000 + Math.random() * 4000;
+      
+      timeoutId = setTimeout(() => {
+        setIsGlitching(true);
+        
+        // Keep the glitch burst active for 750ms
+        timeoutId = setTimeout(() => {
+          setIsGlitching(false);
+          runGlitchCycle();
+        }, 750);
+        
+      }, nextDelay);
+    };
+
+    // Start first periodic glitch 2.2 seconds after boot completes
+    const initTimeout = setTimeout(() => {
+      runGlitchCycle();
+    }, 2200);
+
+    return () => {
+      clearTimeout(initTimeout);
+      clearTimeout(timeoutId);
+    };
+  }, [booted]);
 
   useEffect(() => {
     const onScroll = () => setScrollY(window.scrollY);
@@ -99,12 +132,24 @@ export function Hero({ booted }: { booted: boolean }) {
           [ Aspiring Security Engineer ]
         </div>
 
-        <h1 className="font-bold tracking-normal leading-[1] text-[14vw] sm:text-[12vw] md:text-[10vw] lg:text-[8rem]">
-          <CharSplit text="Hey there!" play={booted} />
+        <h1
+          className={`font-bold tracking-normal leading-[1] text-[14vw] sm:text-[12vw] md:text-[10vw] lg:text-[8rem] glitch glitch-hoverable ${
+            isGlitching ? "glitch-triggered" : ""
+          }`}
+          data-text="Hey There!"
+        >
+          <CharSplit text="Hey There!" play={booted} />
         </h1>
-        <h1 className={`font-bold tracking-normal leading-[1] text-[14vw] sm:text-[12vw] md:text-[10vw] lg:text-[8rem] text-outline mt-6 ${booted ? "animate-fade-in" : "opacity-0"}`}>
-          <CharSplit text="I'm Divyansh" delayBase={400} play={booted} />
-        </h1>
+        <div className={booted ? "animate-fade-in" : "opacity-0"}>
+          <h1
+            className={`font-bold tracking-normal leading-[1] text-[14vw] sm:text-[12vw] md:text-[10vw] lg:text-[8rem] text-muted-foreground mt-6 glitch glitch-hoverable ${
+              isGlitching ? "glitch-triggered" : ""
+            }`}
+            data-text="I'm Divyansh"
+          >
+            <CharSplit text="I'm Divyansh" delayBase={400} play={booted} />
+          </h1>
+        </div>
 
         <div className={`mt-10 font-mono text-sm sm:text-base text-muted-foreground ${booted ? "animate-fade-in [animation-delay:1100ms]" : "opacity-0"}`}>
           <span className="text-foreground">~/</span>
