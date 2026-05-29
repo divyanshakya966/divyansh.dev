@@ -18,21 +18,67 @@ This project is intentionally opinionated: it leans into a dark, terminal-inspir
 - Vite
 - Tailwind CSS v4
 - Cloudflare Workers / Wrangler
+- Self-hosted Inter fonts via @fontsource/inter
+- PWA manifest and install icons
 - Radix UI primitives
 - Lucide icons
 - Recharts
 
 ## Architecture Snapshot
 
-The app is organized as a section-driven portfolio with reusable UI and content modules.
+```mermaid
+flowchart LR
+	Browser[Browser / Edge install] --> Router[TanStack Router]
 
-- `src/components/portfolio` contains the branded portfolio sections and interaction pieces
-- `src/components/ui` holds reusable UI primitives
-- `src/routes` defines the route entry points
-- `src/server.ts` acts as the Cloudflare server entry with SSR error normalization
-- `src/styles.css` defines the theme, motion system, and global presentation layer
+	subgraph AppShell[App Shell]
+		direction TB
+		Root[src/routes/__root.tsx]
+		Head[HeadContent + meta]
+		Index[src/routes/index.tsx]
+		Error[src/lib/error-page.ts]
+		Root --> Head
+		Root --> Index
+		Root --> Error
+	end
 
-The structure keeps the visible portfolio content separate from the lower-level UI and runtime wiring, which makes the project easier to evolve while preserving the public-facing experience.
+	subgraph Experience[Portfolio Experience]
+		direction TB
+		Portfolio[src/components/portfolio/*]
+		UI[src/components/ui/*]
+		Reveal[src/hooks/use-reveal.ts]
+		Cursor[src/components/portfolio/Cursor.tsx]
+		FX[src/components/portfolio/BackgroundFX.tsx]
+		Portfolio --> UI
+		Portfolio --> Reveal
+		Portfolio --> Cursor
+		Portfolio --> FX
+	end
+
+	subgraph Assets[Assets + Presentation]
+		direction TB
+		Styles[src/styles.css]
+		Fonts[@fontsource/inter local fonts]
+		Manifest[public/manifest.json]
+		Icons[public/favicon.ico, icon-192.png, icon-512.png]
+		Styles --> Fonts
+		Head --> Manifest
+		Head --> Icons
+	end
+
+	subgraph Runtime[Runtime]
+		direction TB
+		Server[src/server.ts + src/start.ts]
+		Cloudflare[Cloudflare Workers / SSR]
+		Server --> Cloudflare
+	end
+
+	Router --> Root
+	Index --> Portfolio
+	Root --> Styles
+	Server --> Error
+```
+
+The structure keeps the visible portfolio content separate from the shared shell, asset pipeline, and runtime wiring, which makes the project easier to evolve while preserving the public-facing experience.
 
 ## Design Direction
 
@@ -46,4 +92,4 @@ The overall direction is modern, minimal, and technical:
 
 ## Focus
 
-This repository is meant to represent my profile and work in a polished way, not to document every implementation detail. The emphasis is on presentation, clarity, and a strong first impression.
+This repository is meant to represent my profile and work in a polished way, not to document every implementation detail or any sensitive feature set. The emphasis is on presentation, clarity, and a strong first impression while keeping private capabilities out of the public documentation.
