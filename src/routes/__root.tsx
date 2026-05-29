@@ -72,6 +72,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "theme-color", content: "#000000" },
       { title: "Portfolio" },
       { name: "description", content: "Portfolio Project" },
       { name: "author", content: "Divyansh Shakya" },
@@ -81,9 +82,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       {
+        rel: "manifest",
+        href: "/manifest.json",
+      },
+      {
+        rel: "icon",
+        href: "/favicon.ico",
+      },
+      {
+        rel: "apple-touch-icon",
+        href: "/icon-192.png",
+      },
+      {
         rel: "icon",
         type: "image/png",
-        href: "/favicons/hacker.png",
+        href: "/icon-192.png",
       },
       {
         rel: "stylesheet",
