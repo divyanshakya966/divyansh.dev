@@ -84,7 +84,7 @@ export function Contact() {
               <Send size={15} /> {sending ? "Sending..." : "Send message"}
             </button>
             <a
-              href="/resume/resume.pdf"
+              href="/resume/Divyansh_Shakya_Resume_Digital.pdf"
               target="_blank"
               rel="noreferrer noopener"
               className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium glass hover:bg-muted"
