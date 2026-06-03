@@ -57,7 +57,7 @@ flowchart LR
 	subgraph Assets[Assets + Presentation]
 		direction TB
 		Styles[src/styles.css]
-		Fonts[@fontsource/inter local fonts]
+		Fonts[fontsource/inter local fonts]
 		Manifest[public/manifest.json]
 		Icons[public/favicon.ico, icon-192.png, icon-512.png]
 		Styles --> Fonts
