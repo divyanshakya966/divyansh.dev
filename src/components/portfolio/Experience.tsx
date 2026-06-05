@@ -16,18 +16,18 @@ const items = [
     tag: "Cybersecurity",
   },
   {
+    when: "Apr 2026 – Present",
+    title: "National Hackathon Finalist · 2x",
+    where: "National Level Hackathons",
+    body: "Reached the finals at two national-level student hackathons — shipping secure, full-stack prototypes under tight deadlines with cross-functional teams.",
+    tag: "Hackathon",
+  },
+  {
     when: "2025 – Present",
     title: "B.Tech CSE — Cybersecurity",
     where: "Oriental College of Technology, Bhopal",
     body: "Pursuing Bachelor of Technology in Computer Science with a Cybersecurity specialization. Focusing on Linux, systems, secure software and cloud security fundamentals.",
     tag: "Education",
-  },
-  {
-    when: "2025 / 2026",
-    title: "National Hackathon Finalist · 2x",
-    where: "National Level Hackathons",
-    body: "Reached the finals at two national-level student hackathons — shipping secure, full-stack prototypes under tight deadlines with cross-functional teams.",
-    tag: "Hackathon",
   },
 ];
 
