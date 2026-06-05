@@ -9,18 +9,18 @@ const items = [
     tag: "Open Source",
   },
   {
-    when: "Feb 2026 – Present",
-    title: "Cybersecurity Trainee",
-    where: "TryHackMe",
-    body: "Hands-on training across DevSecOps, security engineering, AI security, penetration testing and web application security. Active labs in reconnaissance, vulnerability assessment and controlled exploitation.",
-    tag: "Cybersecurity",
-  },
-  {
     when: "Apr 2026 – Present",
     title: "National Hackathon Finalist · 2x",
     where: "National Level Hackathons",
     body: "Reached the finals at two national-level student hackathons — shipping secure, full-stack prototypes under tight deadlines with cross-functional teams.",
     tag: "Hackathon",
+  },
+  {
+    when: "Feb 2026 – Present",
+    title: "Cybersecurity Trainee",
+    where: "TryHackMe",
+    body: "Hands-on training across DevSecOps, security engineering, AI security, penetration testing and web application security. Active labs in reconnaissance, vulnerability assessment and controlled exploitation.",
+    tag: "Cybersecurity",
   },
   {
     when: "2025 – Present",

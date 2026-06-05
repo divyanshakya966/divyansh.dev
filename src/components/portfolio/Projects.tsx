@@ -22,20 +22,20 @@ const projects: Project[] = [
     github: "https://github.com/divyanshakya966/AegisStack",
   },
   {
-    title: "Discord AI ChatBot",
-    tag: "Bots / AI",
-    description: "Multipurpose Discord bot with AI chat, moderation utilities and server commands.",
-    long: "A multipurpose Discord bot built with Node.js — AI-powered conversational responses, slash commands, moderation utilities, and quality-of-life server tools. Modular command architecture, easy to extend.",
-    stack: ["Node.js", "TypeScript", "discord.js", "OpenAI"],
-    github: "https://github.com/divyanshakya966/Discord-Bot",
-  },
-  {
     title: "SmartCampus",
     tag: "Full Stack",
     description: "A campus marketplace where students can buy, sell and exchange items safely.",
     long: "SmartCampus is a closed-campus marketplace: verified student accounts, listings with images, chat, and a clean mobile-first UX. Built to solve a real problem on my own campus — secure, simple, and fast.",
     stack: ["Node.js", "Express", "MongoDB", "React"],
     github: "https://github.com/divyanshakya966/SmartCampus",
+  },
+  {
+    title: "Discord AI ChatBot",
+    tag: "Bots / AI",
+    description: "Multipurpose Discord bot with AI chat, moderation utilities and server commands.",
+    long: "A multipurpose Discord bot built with Node.js — AI-powered conversational responses, slash commands, moderation utilities, and quality-of-life server tools. Modular command architecture, easy to extend.",
+    stack: ["Node.js", "TypeScript", "discord.js", "OpenAI"],
+    github: "https://github.com/divyanshakya966/Discord-Bot",
   },
   {
     title: "Telegram Mod Bot",
