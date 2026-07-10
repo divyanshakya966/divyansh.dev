@@ -3,7 +3,8 @@ export function renderErrorPage(): string {
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" href="/favicons/hacker.png" type="image/png" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <title>This page didn't load</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
