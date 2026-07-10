@@ -129,7 +129,7 @@ export function Hero({ booted }: { booted: boolean }) {
             <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan/10 to-violet/10 -z-10" />
             <img
               src="https://avatars.githubusercontent.com/divyanshakya966"
-              alt="Divyansh"
+              alt="Portrait of Divyansh Shakya"
               className="w-full h-full object-cover rounded-full"
             />
           </div>

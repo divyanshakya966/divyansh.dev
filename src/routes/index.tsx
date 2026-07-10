@@ -15,19 +15,23 @@ import { Building } from "@/components/portfolio/Building";
 import { Contact } from "@/components/portfolio/Contact";
 import { Footer } from "@/components/portfolio/Footer";
 import { useReveal } from "@/hooks/use-reveal";
+import { site } from "@/lib/site";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Divyansh Shakya | Cybersecurity Student & Developer" },
-      {
-        name: "description",
-        content:
-          "Portfolio of Divyansh Shakya — B.Tech CSE (Cybersecurity) student focused on AI & Cloud Security, ethical hacking and full-stack web development.",
-      },
-      { property: "og:title", content: "Divyansh Shakya | Cybersecurity Student & Developer" },
-      { property: "og:description", content: "Cybersecurity, Cloud, and full-stack — projects, hackathons and open source." },
+      { title: site.title },
+      { name: "description", content: site.description },
+      { property: "og:title", content: site.title },
+      { property: "og:description", content: site.description },
+      { property: "og:url", content: site.url },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: site.url + site.image },
+      { property: "og:image:alt", content: site.imageAlt },
+      { name: "twitter:title", content: site.title },
+      { name: "twitter:description", content: site.description },
+      { name: "twitter:image", content: site.url + site.image },
+      { name: "twitter:image:alt", content: site.imageAlt },
     ],
   }),
   component: Index,

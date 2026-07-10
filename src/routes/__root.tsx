@@ -9,6 +9,31 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
+import { site } from "@/lib/site";
+
+const personSchema = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  name: site.name,
+  url: site.url,
+  jobTitle: "Cybersecurity Student & Developer",
+  knowsAbout: ["Cybersecurity", "DevSecOps", "Cloud Security", "Ethical Hacking", "Full-Stack Development"],
+  sameAs: site.profiles,
+} as const;
+
+const websiteSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: site.brand,
+  url: site.url,
+  description: site.description,
+  image: site.image,
+  author: {
+    "@type": "Person",
+    name: site.name,
+    url: site.url,
+  },
+} as const;
 
 function NotFoundComponent() {
   return (
@@ -73,14 +98,28 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "theme-color", content: "#000000" },
-      { title: "Portfolio" },
-      { name: "description", content: "Portfolio Project" },
-      { name: "author", content: "Divyansh Shakya" },
-      { property: "og:title", content: "Portfolio" },
-      { property: "og:description", content: "Portfolio Project" },
+      { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
+      { name: "author", content: site.name },
+      { name: "keywords", content: site.keywords.join(", ") },
+      { title: site.title },
+      { name: "description", content: site.description },
+      { property: "og:title", content: site.title },
+      { property: "og:description", content: site.description },
+      { property: "og:url", content: site.url },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: site.url + site.image },
+      { property: "og:image:alt", content: site.imageAlt },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: site.title },
+      { name: "twitter:description", content: site.description },
+      { name: "twitter:image", content: site.url + site.image },
+      { name: "twitter:image:alt", content: site.imageAlt },
     ],
     links: [
+      {
+        rel: "canonical",
+        href: site.url,
+      },
       {
         rel: "manifest",
         href: "/manifest.json",
@@ -128,6 +167,8 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script type="application/ld+json">{JSON.stringify(personSchema)}</script>
+        <script type="application/ld+json">{JSON.stringify(websiteSchema)}</script>
       </head>
       <body>
         {children}
