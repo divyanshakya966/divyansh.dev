@@ -100,13 +100,8 @@ export function Hero({ booted }: { booted: boolean }) {
   return (
     <section
       id="top"
-      className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden"
+      className="relative min-h-screen flex flex-col items-center pt-32 md:pt-40 pb-12 overflow-hidden"
     >
-      {/* Scroll hint top */}
-      <div className="absolute top-24 left-1/2 -translate-x-1/2 font-mono text-[10px] uppercase tracking-[0.4em] text-muted-foreground animate-pulse-slow">
-        Scroll
-      </div>
-
       {/* Status pill */}
       <div className="absolute top-32 right-6 sm:right-12 font-mono text-xs">
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -128,6 +123,18 @@ export function Hero({ booted }: { booted: boolean }) {
           transform: `translateY(${-parallaxY}px) scale(${heroScale})`,
         }}
       >
+        {/* Profile Picture */}
+        <div className={`flex justify-center mb-8 ${booted ? "animate-fade-in" : "opacity-0"}`}>
+          <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-2 border-gradient-to-br from-cyan to-violet p-0.5 shadow-lg shadow-cyan/20">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan/10 to-violet/10 -z-10" />
+            <img
+              src="https://avatars.githubusercontent.com/divyanshakya966"
+              alt="Divyansh"
+              className="w-full h-full object-cover rounded-full"
+            />
+          </div>
+        </div>
+
         <div className={`font-mono text-[10px] sm:text-xs uppercase tracking-[0.5em] text-muted-foreground mb-8 ${booted ? "animate-fade-in" : "opacity-0"}`}>
           [ Aspiring Security Engineer ]
         </div>

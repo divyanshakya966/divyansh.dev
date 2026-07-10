@@ -24,19 +24,19 @@ export function IntroBoot({ onCloseStart, onDone }: { onCloseStart: () => void; 
         setTimeout(() => {
           setDone(true);
           onDone();
-        }, 700);
-      }, 350);
+        }, 400);
+      }, 200);
       return () => clearTimeout(t);
     }
     const line = LINES[step].t;
     if (typed.length < line.length) {
-      const t = setTimeout(() => setTyped(line.slice(0, typed.length + 1)), 18 + Math.random() * 22);
+      const t = setTimeout(() => setTyped(line.slice(0, typed.length + 1)), 10 + Math.random() * 12);
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => {
       setStep((s) => s + 1);
       setTyped("");
-    }, 180);
+    }, 80);
     return () => clearTimeout(t);
   }, [typed, step, done, onDone]);
 
