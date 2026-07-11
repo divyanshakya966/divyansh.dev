@@ -98,6 +98,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "theme-color", content: "#000000" },
+      {
+        name: "google-site-verification",
+        content: "HnobFelBeCc_WMRuXMEoK5KiYDPPb0bw4lIYKg8raZM",
+      },
       { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
       { name: "author", content: site.name },
       { name: "keywords", content: site.keywords.join(", ") },

@@ -120,6 +120,10 @@
     font-family: var(--font-sans);
     font-feature-settings: "cv11","ss01","ss03";
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  #root {
+    min-height: 100vh;
   }
   ::selection { background: var(--foreground); color: var(--background); }
 }

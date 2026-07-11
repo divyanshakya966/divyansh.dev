@@ -119,13 +119,13 @@ export function Projects() {
 
       {open && (
         <div
-          className="fixed inset-0 z-[60] grid place-items-center p-4 bg-background/70 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-[60] grid place-items-center p-2 sm:p-4 bg-background/70 backdrop-blur-md animate-fade-in overflow-y-auto"
           onClick={() => setOpen(null)}
           role="dialog"
           aria-modal="true"
         >
           <div
-            className="relative max-w-lg w-full glass rounded-2xl p-7 shadow-elegant"
+            className="relative max-w-lg w-[calc(100%-0.5rem)] sm:w-full max-h-[calc(100svh-1rem)] overflow-y-auto glass rounded-2xl p-5 sm:p-7 shadow-elegant"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -150,7 +150,7 @@ export function Projects() {
                 </span>
               ))}
             </div>
-            <div className="mt-6 flex gap-2">
+            <div className="mt-6 flex flex-wrap gap-2">
               {open.github && (
                 <a
                   href={open.github}
