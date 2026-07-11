@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { site } from "./lib/site";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -23,6 +24,8 @@ type WorkerEnv = {
 };
 
 const CONTACT_API_PATH = "/api/contact";
+const ROBOTS_PATH = "/robots.txt";
+const SITEMAP_PATH = "/sitemap.xml";
 const DEFAULT_TO_EMAIL = "divyanshakya.dev@gmail.com";
 const DEFAULT_FROM_EMAIL = "onboarding@resend.dev";
 const DEFAULT_RATE_LIMIT_MAX = 5;
@@ -35,6 +38,40 @@ function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { "content-type": "application/json; charset=utf-8" },
+  });
+}
+
+function sitemapResponse(): Response {
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${site.url}/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
+`;
+
+  return new Response(body, {
+    headers: {
+      "content-type": "application/xml; charset=utf-8",
+      "cache-control": "public, max-age=0, must-revalidate",
+    },
+  });
+}
+
+function robotsResponse(): Response {
+  const body = `User-agent: *
+Allow: /
+
+Sitemap: ${site.url}/sitemap.xml
+`;
+
+  return new Response(body, {
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "public, max-age=0, must-revalidate",
+    },
   });
 }
 
@@ -89,8 +126,16 @@ function getClientIp(request: Request): string {
 function isRateLimited(request: Request, workerEnv: WorkerEnv): boolean {
   const ip = getClientIp(request);
   const now = Date.now();
-  const windowMs = getNumberEnvValue(workerEnv, "CONTACT_RATE_LIMIT_WINDOW_MS", DEFAULT_RATE_LIMIT_WINDOW_MS);
-  const maxRequests = getNumberEnvValue(workerEnv, "CONTACT_RATE_LIMIT_MAX", DEFAULT_RATE_LIMIT_MAX);
+  const windowMs = getNumberEnvValue(
+    workerEnv,
+    "CONTACT_RATE_LIMIT_WINDOW_MS",
+    DEFAULT_RATE_LIMIT_WINDOW_MS,
+  );
+  const maxRequests = getNumberEnvValue(
+    workerEnv,
+    "CONTACT_RATE_LIMIT_MAX",
+    DEFAULT_RATE_LIMIT_MAX,
+  );
 
   const existing = contactRateLimitStore.get(ip) ?? [];
   const recent = existing.filter((timestamp) => now - timestamp < windowMs);
@@ -186,9 +231,10 @@ async function handleContactRequest(request: Request, env: unknown): Promise<Res
 
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
-    serverEntryPromise = import("@tanstack/react-start/server-entry").then(
-      (m) => ((m as { default?: ServerEntry }).default ?? (m as unknown as ServerEntry)),
-    );
+    serverEntryPromise = import("@tanstack/react-start/server-entry").then((m) => {
+      const entry = (m as { default?: ServerEntry }).default;
+      return entry ?? (m as unknown as ServerEntry);
+    });
   }
   return serverEntryPromise;
 }
@@ -245,6 +291,12 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const url = new URL(request.url);
+      if (url.pathname === ROBOTS_PATH) {
+        return robotsResponse();
+      }
+      if (url.pathname === SITEMAP_PATH) {
+        return sitemapResponse();
+      }
       if (url.pathname === CONTACT_API_PATH) {
         return await handleContactRequest(request, env);
       }

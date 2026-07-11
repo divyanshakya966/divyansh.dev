@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://divyansh.dev.gohack.xyz/sitemap.xml
