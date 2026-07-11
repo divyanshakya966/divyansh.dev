@@ -129,14 +129,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "/manifest.json",
       },
       {
-        rel: "icon",
-        href: "/favicons/hacker.png",
-        type: "image/png",
+        rel: "shortcut icon",
+        href: "/favicon.ico",
       },
       {
         rel: "icon",
         href: "/favicon.ico",
         type: "image/x-icon",
+      },
+      {
+        rel: "icon",
+        href: "/favicons/hacker.png",
+        type: "image/png",
+        sizes: "512x512",
       },
       {
         rel: "icon",
