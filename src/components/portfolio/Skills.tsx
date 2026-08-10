@@ -24,14 +24,18 @@ export function Skills() {
     <Section
       id="skills"
       eyebrow="02 / Skills"
-      title={<>The toolkit, <span className="text-gradient">organized</span>.</>}
+      title={
+        <>
+          The toolkit, <span className="text-gradient">organized</span>.
+        </>
+      }
       description="A focused stack across web, systems and security."
     >
       <div className="grid md:grid-cols-2 gap-4">
         {groups.map((g, gi) => (
           <div
             key={g.title}
-            className="reveal glass rounded-2xl p-6 hover:shadow-elegant transition-all duration-300"
+            className="reveal card-hover glass rounded-2xl p-6 hover:shadow-elegant"
             style={{ transitionDelay: `${gi * 80}ms` }}
           >
             <div className="flex items-center justify-between">

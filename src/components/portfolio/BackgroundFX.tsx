@@ -20,7 +20,12 @@ export function BackgroundFX() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const mqReduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const mqCoarse = window.matchMedia("(pointer: coarse)");
+    if (mqReduced.matches || mqCoarse.matches) return;
+
     let raf = 0;
+    let running = false;
     let drops: number[] = [];
     const fontSize = 14;
     const glyphs = "01░▒▓<>/$_{}[]=+*#01アァカサタナハマヤラワ".split("");
@@ -58,13 +63,26 @@ export function BackgroundFX() {
       }
       raf = requestAnimationFrame(draw);
     };
-    draw();
+    const start = () => {
+      if (running) return;
+      running = true;
+      draw();
+    };
+    const stop = () => {
+      running = false;
+      cancelAnimationFrame(raf);
+    };
+    start();
+
+    const onVisibility = () => (document.hidden ? stop() : start());
+    document.addEventListener("visibilitychange", onVisibility);
 
     const onResize = () => setup();
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("resize", onResize);
-      cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVisibility);
+      stop();
     };
   }, []);
 
@@ -109,9 +127,9 @@ export function BackgroundFX() {
 
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
         {/* matrix rain canvas */}
-        <canvas ref={canvasRef} className="absolute inset-0 opacity-[0.55]" />
+        <canvas ref={canvasRef} className="matrix-rain absolute inset-0 opacity-[0.55]" />
         {/* aurora following cursor */}
-        <div ref={auroraRef} className="absolute inset-0 transition-[background] duration-300" />
+        <div ref={auroraRef} className="absolute inset-0" />
         {/* vignette to focus center */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_25%,var(--background)_92%)]" />
         <div className="absolute inset-0 portfolio-light-vignette" />

@@ -6,7 +6,11 @@ export function Building() {
     <Section
       id="building"
       eyebrow="06 / Status"
-      title={<>Currently <span className="text-gradient">building</span>.</>}
+      title={
+        <>
+          Currently <span className="text-gradient">building</span>.
+        </>
+      }
       description="A live snapshot of what I'm learning and shipping right now."
     >
       <div className="grid md:grid-cols-3 gap-4">
@@ -21,7 +25,8 @@ export function Building() {
           <Hammer size={18} className="text-cyan" />
           <h3 className="mt-4 font-semibold">Building</h3>
           <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-            AegisStack — a DevSecOps assistant that shifts security left across the developer pipeline.
+            AegisStack — a DevSecOps assistant that shifts security left across the developer
+            pipeline.
           </p>
         </div>
 
@@ -29,9 +34,15 @@ export function Building() {
           <BookOpen size={18} className="text-violet" />
           <h3 className="mt-4 font-semibold">Learning</h3>
           <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <li className="flex items-center gap-2"><span className="h-1 w-1 rounded-full bg-violet" /> DevSecOps & pipeline security</li>
-            <li className="flex items-center gap-2"><span className="h-1 w-1 rounded-full bg-violet" /> Kubernetes & container hardening</li>
-            <li className="flex items-center gap-2"><span className="h-1 w-1 rounded-full bg-violet" /> AI & cloud security fundamentals</li>
+            <li className="flex items-center gap-2">
+              <span className="h-1 w-1 rounded-full bg-violet" /> DevSecOps & pipeline security
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="h-1 w-1 rounded-full bg-violet" /> Kubernetes & container hardening
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="h-1 w-1 rounded-full bg-violet" /> AI & cloud security fundamentals
+            </li>
           </ul>
         </div>
 

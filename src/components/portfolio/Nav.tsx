@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Menu, X, Github, Linkedin } from "lucide-react";
-import { applyTheme, getInitialTheme } from "@/lib/theme";
 
 const links = [
   { href: "#about", label: "About" },
   { href: "#skills", label: "Skills" },
   { href: "#projects", label: "Projects" },
   { href: "#experience", label: "Experience" },
+  { href: "#achievements", label: "Achievements" },
   { href: "#building", label: "Building" },
   { href: "#contact", label: "Contact" },
 ];
@@ -15,13 +15,27 @@ export function Nav() {
   const [active, setActive] = useState("");
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    applyTheme(getInitialTheme());
-  }, []);
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        menuBtnRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
+    const onScroll = () => {
+      const y = window.scrollY;
+      setScrolled(y > 12);
+      const about = document.getElementById("about");
+      if (about && y < about.offsetTop - 160) setActive("");
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -38,7 +52,7 @@ export function Nav() {
           if (e.isIntersecting) setActive("#" + e.target.id);
         });
       },
-      { rootMargin: "-45% 0px -50% 0px", threshold: 0 }
+      { rootMargin: "-45% 0px -50% 0px", threshold: 0 },
     );
     sections.forEach((s) => io.observe(s));
     return () => io.disconnect();
@@ -102,9 +116,12 @@ export function Nav() {
             </a>
 
             <button
+              ref={menuBtnRef}
               className="md:hidden grid place-items-center h-9 w-9 rounded-lg glass"
               onClick={() => setOpen((v) => !v)}
               aria-label="Menu"
+              aria-expanded={open}
+              aria-controls="mobile-menu"
             >
               {open ? <X size={16} /> : <Menu size={16} />}
             </button>
@@ -112,7 +129,7 @@ export function Nav() {
         </div>
 
         {open && (
-          <div className="md:hidden mt-2 glass rounded-2xl p-2 animate-fade-in">
+          <div id="mobile-menu" className="md:hidden mt-2 glass rounded-2xl p-2 animate-fade-in">
             {links.map((l) => (
               <a
                 key={l.href}

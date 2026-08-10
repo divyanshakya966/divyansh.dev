@@ -17,7 +17,13 @@ const personSchema = {
   name: site.name,
   url: site.url,
   jobTitle: "Cybersecurity Student & Developer",
-  knowsAbout: ["Cybersecurity", "DevSecOps", "Cloud Security", "Ethical Hacking", "Full-Stack Development"],
+  knowsAbout: [
+    "Cybersecurity",
+    "DevSecOps",
+    "Cloud Security",
+    "Ethical Hacking",
+    "Full-Stack Development",
+  ],
   sameAs: site.profiles,
 } as const;
 
@@ -102,12 +108,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "google-site-verification",
         content: "HnobFelBeCc_WMRuXMEoK5KiYDPPb0bw4lIYKg8raZM",
       },
-      { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
+      {
+        name: "robots",
+        content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+      },
       { name: "author", content: site.name },
       { name: "keywords", content: site.keywords.join(", ") },
       { title: site.title },
       { name: "description", content: site.description },
       { property: "og:title", content: site.title },
+      { property: "og:site_name", content: site.brand },
+      { property: "og:locale", content: "en_IN" },
       { property: "og:description", content: site.description },
       { property: "og:url", content: site.url },
       { property: "og:type", content: "website" },
@@ -139,7 +150,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       {
         rel: "apple-touch-icon",
-        href: "/icon-192.png",
+        href: "/icon-180.png",
       },
       {
         rel: "stylesheet",
@@ -158,10 +169,24 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "document.documentElement.classList.add('js');",
+          }}
+        />
+        <noscript>
+          <style>{`#boot-screen{display:none!important}`}</style>
+        </noscript>
         <script type="application/ld+json">{JSON.stringify(personSchema)}</script>
         <script type="application/ld+json">{JSON.stringify(websiteSchema)}</script>
       </head>
       <body>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:rounded-md focus:bg-foreground focus:px-4 focus:py-2 focus:text-sm focus:text-background"
+        >
+          Skip to content
+        </a>
         {children}
         <Scripts />
       </body>

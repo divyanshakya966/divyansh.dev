@@ -1,3 +1,6 @@
+/// <reference types="vitest/config" />
+import type { UserConfig } from "vite";
+
 // @lovable.dev/vite-tanstack-config already includes the following — do NOT add them manually
 // or the app will break with duplicate plugins:
 //   - tanstackStart, viteReact, tailwindcss, tsConfigPaths, cloudflare (build-only),
@@ -12,4 +15,20 @@ export default defineConfig({
   tanstackStart: {
     server: { entry: "server" },
   },
+  vite: {
+    test: {
+      environment: "jsdom",
+      globals: true,
+      setupFiles: ["./tests/setup.ts"],
+      include: ["tests/**/*.test.{ts,tsx}"],
+      restoreMocks: true,
+      clearMocks: true,
+      coverage: {
+        provider: "v8",
+        reporter: ["text", "html"],
+        include: ["src/**/*.{ts,tsx}"],
+        exclude: ["src/routeTree.gen.ts", "src/routes/**", "src/router.tsx", "src/start.ts"],
+      },
+    },
+  } as unknown as UserConfig,
 });

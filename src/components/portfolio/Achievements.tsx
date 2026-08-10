@@ -13,13 +13,17 @@ export function Achievements() {
     <Section
       id="achievements"
       eyebrow="05 / Achievements"
-      title={<>Highlights & <span className="text-gradient">recognitions</span>.</>}
+      title={
+        <>
+          Highlights & <span className="text-gradient">recognitions</span>.
+        </>
+      }
     >
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {items.map((it, i) => (
           <div
             key={it.title}
-            className="reveal glass rounded-2xl p-5 hover:shadow-glow hover:-translate-y-1 transition-all"
+            className="reveal card-hover glass rounded-2xl p-5 hover:shadow-glow hover:-translate-y-1"
             style={{ transitionDelay: `${i * 60}ms` }}
           >
             <div className="grid place-items-center h-10 w-10 rounded-xl bg-gradient-to-br from-cyan/20 to-violet/20 border border-border">

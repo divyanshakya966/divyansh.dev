@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Section } from "./Section";
 import { ArrowUpRight, Github, Linkedin, Mail, Send } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 export function Contact() {
@@ -27,13 +28,25 @@ export function Contact() {
       });
 
       if (!response.ok) {
+        let detail = "";
+        try {
+          const data = await response.json();
+          if (data && typeof data.error === "string") detail = data.error;
+        } catch {
+          // non-JSON error body — use generic message
+        }
+        if (response.status === 429) {
+          throw new Error(detail || "Too many requests — please try again later.");
+        }
         throw new Error("Unable to send message right now");
       }
 
       form.reset();
       toast.success("Message sent — I'll get back to you soon.");
-    } catch {
-      toast.error("Couldn't send message. Please try again in a moment.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't send message. Please try again in a moment.",
+      );
     } finally {
       setSending(false);
     }
@@ -43,7 +56,11 @@ export function Contact() {
     <Section
       id="contact"
       eyebrow="07 / Contact"
-      title={<>Let's <span className="text-gradient">build</span> something.</>}
+      title={
+        <>
+          Let's <span className="text-gradient">build</span> something.
+        </>
+      }
       description="Open to internships, hackathons and open source collaborations."
     >
       <div className="grid lg:grid-cols-5 gap-6">
@@ -56,12 +73,17 @@ export function Contact() {
             <Field label="Email" name="email" type="email" required />
           </div>
           <div>
-            <label className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+            <label
+              htmlFor="message"
+              className="text-xs font-mono uppercase tracking-widest text-muted-foreground"
+            >
               Message
             </label>
             <textarea
               name="message"
+              id="message"
               required
+              maxLength={5000}
               rows={5}
               className="mt-2 w-full rounded-xl bg-background/40 border border-border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition resize-none"
               placeholder="Tell me about the role, hackathon, or project..."
@@ -95,9 +117,24 @@ export function Contact() {
         </form>
 
         <div className="reveal lg:col-span-2 space-y-3">
-          <SocialLink href="mailto:divyanshakya.dev@gmail.com" icon={Mail} label="Email" sub="divyanshakya.dev@gmail.com" />
-          <SocialLink href="https://github.com/divyanshakya966" icon={Github} label="GitHub" sub="@divyanshakya966" />
-          <SocialLink href="https://www.linkedin.com/in/divyanshakya966" icon={Linkedin} label="LinkedIn" sub="in/divyanshakya966" />
+          <SocialLink
+            href="mailto:divyanshakya.dev@gmail.com"
+            icon={Mail}
+            label="Email"
+            sub="divyanshakya.dev@gmail.com"
+          />
+          <SocialLink
+            href="https://github.com/divyanshakya966"
+            icon={Github}
+            label="GitHub"
+            sub="@divyanshakya966"
+          />
+          <SocialLink
+            href="https://www.linkedin.com/in/divyanshakya966"
+            icon={Linkedin}
+            label="LinkedIn"
+            sub="in/divyanshakya966"
+          />
           <div className="glass rounded-2xl p-5 mt-2">
             <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
               <span className="relative flex h-2 w-2">
@@ -107,7 +144,8 @@ export function Contact() {
               AVAILABLE · Bhopal, India
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Open to cybersecurity, DevSecOps and full-stack internships, hackathons and meaningful OSS work.
+              Open to cybersecurity, DevSecOps and full-stack internships, hackathons and meaningful
+              OSS work.
             </p>
           </div>
         </div>
@@ -116,26 +154,54 @@ export function Contact() {
   );
 }
 
-function Field({ label, name, type = "text", required }: { label: string; name: string; type?: string; required?: boolean }) {
+function Field({
+  label,
+  name,
+  type = "text",
+  required,
+}: {
+  label: string;
+  name: string;
+  type?: string;
+  required?: boolean;
+}) {
   return (
     <div>
-      <label className="text-xs font-mono uppercase tracking-widest text-muted-foreground">{label}</label>
+      <label
+        htmlFor={name}
+        className="text-xs font-mono uppercase tracking-widest text-muted-foreground"
+      >
+        {label}
+      </label>
       <input
+        id={name}
         name={name}
         type={type}
         required={required}
+        maxLength={name === "email" ? 254 : 120}
         className="mt-2 w-full rounded-xl bg-background/40 border border-border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition"
       />
     </div>
   );
 }
 
-function SocialLink({ href, icon: Icon, label, sub }: { href: string; icon: any; label: string; sub: string }) {
+function SocialLink({
+  href,
+  icon: Icon,
+  label,
+  sub,
+}: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  sub: string;
+}) {
+  const isMailTo = href.startsWith("mailto:");
   return (
     <a
       href={href}
-      target="_blank"
-      rel="noreferrer"
+      target={isMailTo ? undefined : "_blank"}
+      rel={isMailTo ? undefined : "noreferrer noopener"}
       className="group flex items-center gap-4 glass rounded-2xl p-4 hover:shadow-glow hover:-translate-y-0.5 transition-all"
     >
       <div className="grid place-items-center h-11 w-11 rounded-xl bg-gradient-to-br from-cyan/20 to-violet/20 border border-border">
@@ -145,7 +211,9 @@ function SocialLink({ href, icon: Icon, label, sub }: { href: string; icon: any;
         <div className="text-sm font-semibold">{label}</div>
         <div className="text-xs text-muted-foreground truncate">{sub}</div>
       </div>
-      <span className="ml-auto text-xs text-muted-foreground group-hover:text-foreground transition-colors">→</span>
+      <span className="ml-auto text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+        →
+      </span>
     </a>
   );
 }

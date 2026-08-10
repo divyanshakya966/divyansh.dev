@@ -32,3 +32,6 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Test artifacts
+coverage/

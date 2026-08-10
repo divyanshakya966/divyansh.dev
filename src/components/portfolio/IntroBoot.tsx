@@ -9,7 +9,13 @@ const LINES = [
   { p: "$", t: "./portfolio --launch" },
 ];
 
-export function IntroBoot({ onCloseStart, onDone }: { onCloseStart: () => void; onDone: () => void }) {
+export function IntroBoot({
+  onCloseStart,
+  onDone,
+}: {
+  onCloseStart: () => void;
+  onDone: () => void;
+}) {
   const [step, setStep] = useState(0);
   const [typed, setTyped] = useState("");
   const [done, setDone] = useState(false);
@@ -17,20 +23,37 @@ export function IntroBoot({ onCloseStart, onDone }: { onCloseStart: () => void; 
 
   useEffect(() => {
     if (done) return;
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
     if (step >= LINES.length) {
-      const t = setTimeout(() => {
-        setClosing(true);
-        onCloseStart();
-        setTimeout(() => {
-          setDone(true);
-          onDone();
-        }, 400);
-      }, 200);
+      const t = setTimeout(
+        () => {
+          setClosing(true);
+          onCloseStart();
+          setTimeout(() => {
+            setDone(true);
+            onDone();
+          }, 750);
+        },
+        reduced ? 0 : 200,
+      );
       return () => clearTimeout(t);
     }
+
+    if (reduced) {
+      setStep(LINES.length);
+      setTyped("");
+      return;
+    }
+
     const line = LINES[step].t;
     if (typed.length < line.length) {
-      const t = setTimeout(() => setTyped(line.slice(0, typed.length + 1)), 10 + Math.random() * 12);
+      const t = setTimeout(
+        () => setTyped(line.slice(0, typed.length + 1)),
+        10 + Math.random() * 12,
+      );
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => {
@@ -38,12 +61,13 @@ export function IntroBoot({ onCloseStart, onDone }: { onCloseStart: () => void; 
       setTyped("");
     }, 80);
     return () => clearTimeout(t);
-  }, [typed, step, done, onDone]);
+  }, [typed, step, done, onCloseStart, onDone]);
 
   if (done) return null;
 
   return (
     <div
+      id="boot-screen"
       className={`fixed inset-0 z-[80] bg-background flex items-center justify-center transition-opacity duration-700 ${
         closing ? "opacity-0" : "opacity-100"
       }`}

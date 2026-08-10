@@ -18,11 +18,15 @@ function useTyping(enabled: boolean) {
 
     const current = ROLES[i];
     const speed = del ? 35 : 65;
+    let holdT: ReturnType<typeof setTimeout> | undefined;
+
     const t = setTimeout(() => {
       if (!del) {
         const next = current.slice(0, text.length + 1);
         setText(next);
-        if (next === current) setTimeout(() => setDel(true), 1400);
+        if (next === current) {
+          holdT = setTimeout(() => setDel(true), 1400);
+        }
       } else {
         const next = current.slice(0, text.length - 1);
         setText(next);
@@ -32,7 +36,11 @@ function useTyping(enabled: boolean) {
         }
       }
     }, speed);
-    return () => clearTimeout(t);
+
+    return () => {
+      clearTimeout(t);
+      if (holdT) clearTimeout(holdT);
+    };
   }, [text, del, i, enabled]);
 
   return text;
@@ -79,16 +87,15 @@ export function Hero({ booted }: { booted: boolean }) {
     const runGlitchCycle = () => {
       // Wait a random interval between 3 to 7 seconds before triggering a burst
       const nextDelay = 3000 + Math.random() * 4000;
-      
+
       timeoutId = setTimeout(() => {
         setIsGlitching(true);
-        
+
         // Keep the glitch burst active for 750ms
         timeoutId = setTimeout(() => {
           setIsGlitching(false);
           runGlitchCycle();
         }, 750);
-        
       }, nextDelay);
     };
 
@@ -120,16 +127,16 @@ export function Hero({ booted }: { booted: boolean }) {
     >
       {/* Centerpiece */}
       <div
-        className={`relative w-full max-w-5xl px-4 sm:px-6 text-center will-change-transform transition-opacity duration-700 ${
-          booted ? "opacity-100" : "opacity-0"
-        }`}
+        className="relative w-full max-w-5xl px-4 sm:px-6 text-center will-change-transform transition-opacity duration-700"
         style={{
           opacity: heroOpacity,
           transform: `translateY(${-parallaxY}px) scale(${heroScale})`,
         }}
       >
         {/* Profile Picture */}
-        <div className={`flex justify-center mb-5 sm:mb-8 ${booted ? "animate-fade-in" : "opacity-0"}`}>
+        <div
+          className={`flex justify-center mb-5 sm:mb-8 ${booted ? "animate-fade-in" : "boot-gated"}`}
+        >
           <div className="relative w-24 h-24 sm:w-40 sm:h-40 rounded-full overflow-hidden border-2 border-gradient-to-br from-cyan to-violet p-0.5 shadow-lg shadow-cyan/20">
             <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan/10 to-violet/10 -z-10" />
             <img
@@ -140,7 +147,9 @@ export function Hero({ booted }: { booted: boolean }) {
           </div>
         </div>
 
-        <div className={`font-mono text-[9px] sm:text-xs uppercase tracking-[0.28em] sm:tracking-[0.5em] text-muted-foreground mb-5 sm:mb-8 ${booted ? "animate-fade-in" : "opacity-0"}`}>
+        <div
+          className={`font-mono text-[9px] sm:text-xs uppercase tracking-[0.28em] sm:tracking-[0.5em] text-muted-foreground mb-5 sm:mb-8 ${booted ? "animate-fade-in" : "boot-gated"}`}
+        >
           [ Aspiring Security Engineer ]
         </div>
 
@@ -152,24 +161,31 @@ export function Hero({ booted }: { booted: boolean }) {
         >
           <CharSplit text="Hey There!" play={booted} />
         </h1>
-        <div className={booted ? "animate-fade-in" : "opacity-0"}>
-          <h1
-            className={`font-bold tracking-normal leading-[0.95] text-[clamp(2.8rem,14vw,8rem)] sm:text-[12vw] md:text-[10vw] lg:text-[8rem] text-muted-foreground mt-4 sm:mt-6 glitch glitch-hoverable ${
+        <div className={booted ? "animate-fade-in" : "boot-gated"}>
+          <p
+            className={`font-bold tracking-normal leading-[0.95] text-[clamp(2.8rem,14vw,8rem)] sm:text-[12vw] md:text-[10vw] lg:text-[8rem] text-muted-foreground mt-4 sm:mt-6 glitch glitch-mobile glitch-hoverable ${
               isGlitching ? "glitch-triggered" : ""
             }`}
             data-text="I'm Divyansh"
           >
             <span className="flex flex-col items-center text-center sm:hidden">
               <CharSplit text="I'm" delayBase={400} play={booted} className="whitespace-nowrap" />
-              <CharSplit text="Divyansh" delayBase={560} play={booted} className="whitespace-nowrap" />
+              <CharSplit
+                text="Divyansh"
+                delayBase={560}
+                play={booted}
+                className="whitespace-nowrap"
+              />
             </span>
             <span className="hidden sm:inline-flex">
               <CharSplit text="I'm Divyansh" delayBase={400} play={booted} />
             </span>
-          </h1>
+          </p>
         </div>
 
-        <div className={`mt-10 font-mono text-sm sm:text-base text-muted-foreground ${booted ? "animate-fade-in [animation-delay:1100ms]" : "opacity-0"}`}>
+        <div
+          className={`mt-10 font-mono text-sm sm:text-base text-muted-foreground ${booted ? "animate-fade-in [animation-delay:1100ms]" : "boot-gated"}`}
+        >
           <span className="text-foreground">~/</span>
           <span>{typed}</span>
           <span className="inline-block w-[8px] h-4 bg-foreground align-middle ml-1 animate-blink" />
@@ -179,22 +195,28 @@ export function Hero({ booted }: { booted: boolean }) {
       {/* Bottom row */}
       <div className="relative sm:absolute sm:bottom-12 inset-x-0 mt-10 sm:mt-0 px-4 sm:px-12 pb-4 sm:pb-0">
         <div className="mx-auto max-w-6xl flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4 sm:gap-6">
-          <div className={`font-mono text-[11px] sm:text-xs text-muted-foreground max-w-xs text-center sm:text-left ${booted ? "animate-fade-in [animation-delay:1300ms]" : "opacity-0"}`}>
+          <div
+            className={`font-mono text-[11px] sm:text-xs text-muted-foreground max-w-xs text-center sm:text-left ${booted ? "animate-fade-in [animation-delay:1300ms]" : "boot-gated"}`}
+          >
             Building secure, scalable systems
-            <br />
-            — DevSecOps · Linux · Cloud.
+            <br />— DevSecOps · Linux · Cloud.
           </div>
 
           <a
             href="#projects"
-            className={`group inline-flex items-center gap-3 font-mono text-xs uppercase tracking-[0.3em] text-foreground ${booted ? "animate-fade-in [animation-delay:1400ms]" : "opacity-0"}`}
+            className={`group inline-flex items-center gap-3 font-mono text-xs uppercase tracking-[0.3em] text-foreground ${booted ? "animate-fade-in [animation-delay:1400ms]" : "boot-gated"}`}
           >
             <span className="h-px w-12 bg-foreground/40 group-hover:w-20 transition-all duration-500" />
             View Work
-            <ArrowUpRight size={14} className="transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            <ArrowUpRight
+              size={14}
+              className="transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+            />
           </a>
 
-          <div className={`font-mono text-[11px] sm:text-xs text-muted-foreground text-center sm:text-right ${booted ? "animate-fade-in [animation-delay:1500ms]" : "opacity-0"}`}>
+          <div
+            className={`font-mono text-[11px] sm:text-xs text-muted-foreground text-center sm:text-right ${booted ? "animate-fade-in [animation-delay:1500ms]" : "boot-gated"}`}
+          >
             Bhopal, India · Open to
             <br />
             internships & hackathons

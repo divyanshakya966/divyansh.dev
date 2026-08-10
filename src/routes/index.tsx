@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Nav } from "@/components/portfolio/Nav";
 import { BackgroundFX } from "@/components/portfolio/BackgroundFX";
@@ -40,12 +40,36 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [bootClosing, setBootClosing] = useState(false);
   const [bootDone, setBootDone] = useState(false);
+  const handleBootCloseStart = useCallback(() => setBootClosing(true), []);
+  const handleBootDone = useCallback(() => {
+    try {
+      window.sessionStorage.setItem("ds-boot-seen", "1");
+    } catch {
+      // ignore storage failures
+    }
+    setBootDone(true);
+  }, []);
+
+  // Play the boot animation once per session; skip it on reloads/back-nav.
+  useEffect(() => {
+    let seen = false;
+    try {
+      seen = window.sessionStorage.getItem("ds-boot-seen") === "1";
+    } catch {
+      // ignore storage failures
+    }
+    if (seen) {
+      setBootClosing(true);
+      setBootDone(true);
+    }
+  }, []);
+
   useReveal(bootClosing);
   return (
-    <main className="relative min-h-screen">
+    <main id="main-content" tabIndex={-1} className="relative min-h-screen outline-none">
       <BackgroundFX />
       <Cursor />
-      {!bootDone && <IntroBoot onCloseStart={() => setBootClosing(true)} onDone={() => setBootDone(true)} />}
+      {!bootDone && <IntroBoot onCloseStart={handleBootCloseStart} onDone={handleBootDone} />}
       <Nav />
       <Hero booted={bootClosing} />
       <About />

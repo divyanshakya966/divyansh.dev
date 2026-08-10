@@ -137,6 +137,15 @@ function isRateLimited(request: Request, workerEnv: WorkerEnv): boolean {
     DEFAULT_RATE_LIMIT_MAX,
   );
 
+  // Prune idle per-IP entries so the map can't grow unbounded across a long-lived isolate.
+  if (contactRateLimitStore.size > 10_000) {
+    const cutoff = now - windowMs;
+    for (const [key, timestamps] of contactRateLimitStore) {
+      const latest = timestamps[timestamps.length - 1];
+      if (latest === undefined || latest < cutoff) contactRateLimitStore.delete(key);
+    }
+  }
+
   const existing = contactRateLimitStore.get(ip) ?? [];
   const recent = existing.filter((timestamp) => now - timestamp < windowMs);
 
@@ -150,6 +159,10 @@ function isRateLimited(request: Request, workerEnv: WorkerEnv): boolean {
   return false;
 }
 
+const MAX_NAME_LENGTH = 120;
+const MAX_EMAIL_LENGTH = 254;
+const MAX_MESSAGE_LENGTH = 5000;
+
 function parseContactPayload(payload: unknown): ContactPayload | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
@@ -160,7 +173,15 @@ function parseContactPayload(payload: unknown): ContactPayload | null {
   const email = typeof data.email === "string" ? data.email.trim() : "";
   const message = typeof data.message === "string" ? data.message.trim() : "";
 
-  if (!name || !email || !message || !isValidEmail(email)) {
+  if (
+    !name ||
+    !email ||
+    !message ||
+    name.length > MAX_NAME_LENGTH ||
+    email.length > MAX_EMAIL_LENGTH ||
+    message.length > MAX_MESSAGE_LENGTH ||
+    !isValidEmail(email)
+  ) {
     return null;
   }
 

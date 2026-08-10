@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Section } from "./Section";
-import { Github, ExternalLink, X } from "lucide-react";
+import { Github, ExternalLink } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Project = {
   title: string;
@@ -16,7 +23,8 @@ const projects: Project[] = [
   {
     title: "AegisStack",
     tag: "DevSecOps",
-    description: "A DevSecOps assistant that helps developers shift security left across the pipeline.",
+    description:
+      "A DevSecOps assistant that helps developers shift security left across the pipeline.",
     long: "AegisStack is a DevSecOps assistant focused on baking security into every stage of the software delivery pipeline — dependency scanning, secret detection, container hardening checks, and policy-as-code guidance. Designed to give developers actionable, contextual security feedback without slowing them down.",
     stack: ["Python", "Docker", "K8s", "DevSecOps"],
     github: "https://github.com/divyanshakya966/AegisStack",
@@ -54,14 +62,28 @@ export function Projects() {
     <Section
       id="projects"
       eyebrow="03 / Projects"
-      title={<>Selected <span className="text-gradient">work</span>.</>}
+      title={
+        <>
+          Selected <span className="text-gradient">work</span>.
+        </>
+      }
       description="DevSecOps tooling, bots and full-stack apps I've shipped or am actively building."
     >
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
         {projects.map((p, i) => (
           <article
             key={p.title}
-            className="reveal group relative glass rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:shadow-glow transition-all duration-300 overflow-hidden"
+            role="button"
+            tabIndex={0}
+            aria-haspopup="dialog"
+            aria-label={`View details about ${p.title}`}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setOpen(p);
+              }
+            }}
+            className="reveal card-hover group relative glass rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:shadow-glow overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring"
             style={{ transitionDelay: `${i * 60}ms` }}
             onClick={() => setOpen(p)}
           >
@@ -117,64 +139,53 @@ export function Projects() {
         ))}
       </div>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-[60] grid place-items-center p-2 sm:p-4 bg-background/70 backdrop-blur-md animate-fade-in overflow-y-auto"
-          onClick={() => setOpen(null)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="relative max-w-lg w-[calc(100%-0.5rem)] sm:w-full max-h-[calc(100svh-1rem)] overflow-y-auto glass rounded-2xl p-5 sm:p-7 shadow-elegant"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setOpen(null)}
-              className="absolute top-4 right-4 grid place-items-center h-8 w-8 rounded-md hover:bg-muted"
-              aria-label="Close"
-            >
-              <X size={16} />
-            </button>
+      <Dialog open={!!open} onOpenChange={(isOpen) => setOpen(isOpen ? open : null)}>
+        <DialogContent className="max-w-lg max-h-[85svh] overflow-y-auto border-border/60 bg-card/70 backdrop-blur-md sm:rounded-2xl shadow-elegant">
+          <DialogHeader className="text-left">
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              {open.tag}
+              {open?.tag}
             </span>
-            <h3 className="mt-2 text-2xl font-bold">{open.title}</h3>
-            <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{open.long}</p>
-            <div className="mt-5 flex flex-wrap gap-1.5">
-              {open.stack.map((s) => (
-                <span
-                  key={s}
-                  className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-mono text-muted-foreground"
-                >
-                  {s}
-                </span>
-              ))}
-            </div>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {open.github && (
-                <a
-                  href={open.github}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm glass hover:bg-muted"
-                >
-                  <Github size={14} /> Source
-                </a>
-              )}
-              {open.demo && (
-                <a
-                  href={open.demo}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm bg-gradient-to-r from-cyan to-violet text-primary-foreground"
-                >
-                  <ExternalLink size={14} /> Live
-                </a>
-              )}
-            </div>
+            <DialogTitle className="text-2xl font-bold tracking-tight mt-2">
+              {open?.title}
+            </DialogTitle>
+          </DialogHeader>
+          <DialogDescription className="text-left text-sm text-muted-foreground leading-relaxed">
+            {open?.long}
+          </DialogDescription>
+          <div className="flex flex-wrap gap-1.5">
+            {(open?.stack ?? []).map((s) => (
+              <span
+                key={s}
+                className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-mono text-muted-foreground"
+              >
+                {s}
+              </span>
+            ))}
           </div>
-        </div>
-      )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {open?.github && (
+              <a
+                href={open.github}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm glass hover:bg-muted"
+              >
+                <Github size={14} /> Source
+              </a>
+            )}
+            {open?.demo && (
+              <a
+                href={open.demo}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm bg-gradient-to-r from-cyan to-violet text-primary-foreground"
+              >
+                <ExternalLink size={14} /> Live
+              </a>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Section>
   );
 }

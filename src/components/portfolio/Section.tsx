@@ -28,9 +28,7 @@ export function Section({
             {title}
           </h2>
           {description && (
-            <p className="reveal mt-4 text-base sm:text-lg text-muted-foreground">
-              {description}
-            </p>
+            <p className="reveal mt-4 text-base sm:text-lg text-muted-foreground">{description}</p>
           )}
         </div>
         <div className="reveal-stagger">{children}</div>
