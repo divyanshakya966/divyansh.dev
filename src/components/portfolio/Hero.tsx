@@ -139,7 +139,7 @@ export function Hero({ booted }: { booted: boolean }) {
             <div className="relative w-24 h-24 sm:w-40 sm:h-40 rounded-full overflow-hidden border-2 border-gradient-to-br from-cyan to-violet p-0.5 shadow-lg shadow-cyan/20">
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan/10 to-violet/10 -z-10" />
               <img
-                src="https://avatars.githubusercontent.com/u/196189584?s=400&v=4"
+                src="/avatar.png"
                 alt="Portrait of Divyansh Shakya"
                 width={160}
                 height={160}
