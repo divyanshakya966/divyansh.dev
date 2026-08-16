@@ -16,7 +16,15 @@ export const site = {
     "Bhopal",
     "India",
   ],
-  profiles: ["https://github.com/divyanshakya966", "https://linkedin.com/in/divyanshakya966"],
+  profiles: [
+    "https://github.com/divyanshakya966",
+    "https://linkedin.com/in/divyanshakya966",
+    "https://hashnode.com/@divyanshakya966",
+    "https://tryhackme.com/p/divyanshakya966",
+    "https://profile.hackthebox.com/profile/019c5d4a-8b27-718b-baa5-4597358c866b",
+    "https://leetcode.com/u/divyanshakya966",
+    "https://x.com/divyanshakya966",
+  ],
   image: "/og-image.png",
   imageAlt: "Divyansh Shakya portfolio preview card",
 } as const;

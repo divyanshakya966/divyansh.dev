@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Nav } from "@/components/portfolio/Nav";
+import { SocialPanel } from "@/components/portfolio/SocialPanel";
 import { BackgroundFX } from "@/components/portfolio/BackgroundFX";
 import { Cursor } from "@/components/portfolio/Cursor";
 import { IntroBoot } from "@/components/portfolio/IntroBoot";
@@ -71,6 +72,7 @@ function Index() {
       <Cursor />
       {!bootDone && <IntroBoot onCloseStart={handleBootCloseStart} onDone={handleBootDone} />}
       <Nav />
+      <SocialPanel />
       <Hero booted={bootClosing} />
       <About />
       <Skills />
