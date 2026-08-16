@@ -16,7 +16,10 @@ describe("Hero", () => {
   it("renders the profile picture with proper alt text", () => {
     render(<Hero booted />);
     const img = screen.getByRole("img", { name: "Portrait of Divyansh Shakya" });
-    expect(img).toHaveAttribute("src", "https://avatars.githubusercontent.com/divyanshakya966");
+    expect(img).toHaveAttribute(
+      "src",
+      "https://avatars.githubusercontent.com/u/196189584?s=400&v=4",
+    );
   });
 
   it("links to the projects section", () => {

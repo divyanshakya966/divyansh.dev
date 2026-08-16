@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Menu, X, Github, Linkedin } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
 const links = [
   { href: "#about", label: "About" },
@@ -11,10 +11,49 @@ const links = [
   { href: "#contact", label: "Contact" },
 ];
 
+const TERMS = ["techie", "builder", "hacker", "tinkerer"];
+
+function useTypewriter() {
+  const [i, setI] = useState(0);
+  const [text, setText] = useState("");
+  const [del, setDel] = useState(false);
+
+  useEffect(() => {
+    const current = TERMS[i];
+    const speed = del ? 30 : 65;
+    let holdT: ReturnType<typeof setTimeout> | undefined;
+
+    const t = setTimeout(() => {
+      if (!del) {
+        const next = current.slice(0, text.length + 1);
+        setText(next);
+        if (next === current) {
+          holdT = setTimeout(() => setDel(true), 1400);
+        }
+      } else {
+        const next = current.slice(0, text.length - 1);
+        setText(next);
+        if (next === "") {
+          setDel(false);
+          setI((v) => (v + 1) % TERMS.length);
+        }
+      }
+    }, speed);
+
+    return () => {
+      clearTimeout(t);
+      if (holdT) clearTimeout(holdT);
+    };
+  }, [text, del, i]);
+
+  return text;
+}
+
 export function Nav() {
   const [active, setActive] = useState("");
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const typed = useTypewriter();
   const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -31,10 +70,7 @@ export function Nav() {
 
   useEffect(() => {
     const onScroll = () => {
-      const y = window.scrollY;
-      setScrolled(y > 12);
-      const about = document.getElementById("about");
-      if (about && y < about.offsetTop - 160) setActive("");
+      setScrolled(window.scrollY > 12);
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -49,7 +85,11 @@ export function Nav() {
     const io = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
-          if (e.isIntersecting) setActive("#" + e.target.id);
+          if (e.isIntersecting) {
+            setActive("#" + e.target.id);
+          } else if (e.target.id === "about") {
+            setActive((cur) => (cur === "#about" ? "" : cur));
+          }
         });
       },
       { rootMargin: "-45% 0px -50% 0px", threshold: 0 },
@@ -66,6 +106,7 @@ export function Nav() {
     >
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div
+          style={{ marginTop: "env(safe-area-inset-top)" }}
           className={`flex items-center justify-between rounded-2xl px-4 sm:px-5 py-2.5 transition-all ${
             scrolled ? "glass shadow-elegant" : ""
           }`}
@@ -75,12 +116,12 @@ export function Nav() {
             <span className="text-gradient">divyansh.dev</span>
           </a>
 
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-0.5 xl:gap-1">
             {links.map((l) => (
               <a
                 key={l.href}
                 href={l.href}
-                className={`relative px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                className={`relative px-2.5 xl:px-3 py-1.5 text-sm rounded-lg transition-colors ${
                   active === l.href
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -95,25 +136,14 @@ export function Nav() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <a
-              href="https://github.com/divyanshakya966"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="GitHub"
-              className="hidden md:inline-flex items-center justify-center h-9 w-9 rounded-lg bg-transparent text-muted-foreground hover:text-foreground hover:bg-foreground/6 transition"
+            <span
+              aria-hidden="true"
+              className="hidden lg:inline-flex items-center font-mono text-sm text-muted-foreground min-w-[5.5rem]"
             >
-              <Github size={16} />
-            </a>
-
-            <a
-              href="https://linkedin.com/in/divyanshakya966"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="LinkedIn"
-              className="hidden md:inline-flex items-center justify-center h-9 w-9 rounded-lg bg-transparent text-muted-foreground hover:text-foreground hover:bg-foreground/6 transition"
-            >
-              <Linkedin size={16} />
-            </a>
+              <span className="text-foreground">&gt;</span>
+              <span className="ml-1.5 text-foreground/90">{typed}</span>
+              <span className="inline-block h-3.5 w-px bg-foreground/80 ml-0.5 animate-blink" />
+            </span>
 
             <button
               ref={menuBtnRef}

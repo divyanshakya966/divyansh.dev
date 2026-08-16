@@ -73,7 +73,6 @@ export function IntroBoot({
       }`}
       aria-hidden
     >
-      {/* scanlines + grain inside */}
       <div className="absolute inset-0 scanlines-overlay opacity-40" />
       <div className="absolute inset-0 noise-overlay" />
 

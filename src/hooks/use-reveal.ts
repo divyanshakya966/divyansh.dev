@@ -14,7 +14,6 @@ export function useReveal(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
 
-    // assign stagger delays
     document.querySelectorAll<HTMLElement>(".reveal-stagger").forEach((parent) => {
       const kids = parent.querySelectorAll<HTMLElement>(":scope > .reveal, :scope .reveal-child");
       kids.forEach((el, i) => {

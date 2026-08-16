@@ -23,13 +23,11 @@ describe("Nav", () => {
     });
   });
 
-  it("renders social links in a new tab", () => {
+  it("renders the terminal prompt mark instead of social links", () => {
     render(<Nav />);
-    for (const label of ["GitHub", "LinkedIn"]) {
-      const link = screen.getByRole("link", { name: label });
-      expect(link).toHaveAttribute("target", "_blank");
-      expect(link).toHaveAttribute("rel", "noopener noreferrer");
-    }
+    expect(screen.queryByRole("link", { name: "GitHub" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "LinkedIn" })).not.toBeInTheDocument();
+    expect(screen.getByText(">")).toBeInTheDocument();
   });
 
   it("renders the mobile menu button with aria attributes", () => {

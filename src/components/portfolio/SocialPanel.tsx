@@ -1,4 +1,4 @@
-import { Github, Linkedin, Mail } from "lucide-react";
+import { Github, Linkedin } from "lucide-react";
 import type { ReactNode } from "react";
 
 const links = [
@@ -37,18 +37,13 @@ const links = [
     href: "https://x.com/divyanshakya966",
     icon: <XIcon />,
   },
-  {
-    name: "Email",
-    href: "mailto:divyanshakya.dev@gmail.com",
-    icon: <Mail size={16} />,
-  },
 ];
 
 export function SocialPanel() {
   return (
     <aside
       aria-label="Social profiles"
-      className="hidden xl:flex fixed left-4 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 rounded-2xl glass p-1.5"
+      className="hidden xl:flex fixed left-[max(1rem,env(safe-area-inset-left))] top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 rounded-2xl glass p-1.5"
     >
       {links.map((l) => (
         <a
@@ -58,8 +53,11 @@ export function SocialPanel() {
           rel={l.href.startsWith("mailto:") ? undefined : "noopener noreferrer"}
           aria-label={l.name}
           title={l.name}
-          className="grid place-items-center h-9 w-9 rounded-lg bg-transparent text-muted-foreground hover:text-foreground hover:bg-foreground/6 transition"
+          className="group relative grid place-items-center h-9 w-9 rounded-lg bg-transparent text-muted-foreground hover:text-foreground hover:bg-foreground/6 transition"
         >
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md glass px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+            {l.name}
+          </span>
           {l.icon}
         </a>
       ))}

@@ -13,7 +13,6 @@ export function BackgroundFX() {
   const auroraRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
 
-  // matrix rain
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -53,7 +52,6 @@ export function BackgroundFX() {
         const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
         const x = i * fontSize;
         const y = drops[i] * fontSize;
-        // head bright
         if (Math.random() > 0.975) ctx.fillStyle = "rgba(230, 230, 230, 0.85)";
         else ctx.fillStyle = `rgba(200, 200, 200, ${0.06 + Math.random() * 0.08})`;
         ctx.fillText(ch, x, y);
@@ -86,7 +84,6 @@ export function BackgroundFX() {
     };
   }, []);
 
-  // aurora + progress
   useEffect(() => {
     let raf = 0;
     const onScroll = () => {
@@ -116,7 +113,6 @@ export function BackgroundFX() {
 
   return (
     <>
-      {/* top scroll progress */}
       <div className="fixed top-0 inset-x-0 h-px z-[60] pointer-events-none bg-foreground/5">
         <div
           ref={progressRef}
@@ -126,14 +122,10 @@ export function BackgroundFX() {
       </div>
 
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        {/* matrix rain canvas */}
         <canvas ref={canvasRef} className="matrix-rain absolute inset-0 opacity-[0.55]" />
-        {/* aurora following cursor */}
         <div ref={auroraRef} className="absolute inset-0" />
-        {/* vignette to focus center */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_25%,var(--background)_92%)]" />
         <div className="absolute inset-0 portfolio-light-vignette" />
-        {/* texture */}
         <div className="absolute inset-0 noise-overlay" />
         <div className="absolute inset-0 scanlines-overlay" />
       </div>

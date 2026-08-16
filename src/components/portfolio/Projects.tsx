@@ -140,7 +140,7 @@ export function Projects() {
       </div>
 
       <Dialog open={!!open} onOpenChange={(isOpen) => setOpen(isOpen ? open : null)}>
-        <DialogContent className="max-w-lg max-h-[85svh] overflow-y-auto border-border/60 bg-card/70 backdrop-blur-md sm:rounded-2xl shadow-elegant">
+        <DialogContent className="max-w-lg max-h-85-viewport overflow-y-auto border-border/60 bg-card/70 backdrop-blur-md sm:rounded-2xl shadow-elegant">
           <DialogHeader className="text-left">
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
               {open?.tag}

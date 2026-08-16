@@ -51,7 +51,6 @@
   --animate-marquee: marquee 40s linear infinite;
 }
 
-/* Monochrome — pure black + bone white. Single restrained accent. */
 :root {
   --radius: 0.5rem;
   --background: oklch(0.07 0 0);
@@ -186,6 +185,9 @@
     scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     background-color: var(--color-background);
@@ -198,12 +200,17 @@
   #root {
     min-height: 100vh;
   }
+  @supports (height: 100svh) {
+    #root {
+      min-height: 100svh;
+    }
+  }
   ::selection {
     background: var(--foreground);
     color: var(--background);
   }
 
-  /* Pre-boot hidden state for hero elements (replaces opacity-0 gating). */
+  /* Pre-boot hidden state for hero elements */
   .boot-gated {
     opacity: 0;
   }
@@ -299,7 +306,6 @@
     background-clip: text;
     color: transparent;
   }
-  /* huge stroked outline display text */
   .text-outline {
     -webkit-text-stroke: 1px oklch(0.97 0 0 / 0.5);
     color: transparent;
@@ -352,7 +358,6 @@
     mix-blend-mode: overlay;
     opacity: 0.18;
   }
-  /* Reveal system */
   .reveal,
   .reveal-child {
     opacity: 0;
@@ -397,8 +402,7 @@
     clip-path: inset(0 0 0 0);
   }
 
-  /* Hover transition for .reveal cards — must come AFTER .reveal so it wins the cascade.
-     Keeps the reveal's 0.9s motion, but makes hover lifts/shadows feel snappy (0.3s). */
+  /* Hover transition for .reveal cards */
   .card-hover {
     transition:
       opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
@@ -409,7 +413,6 @@
       border-color 0.3s ease;
   }
 
-  /* Two-line glitch copies for the mobile-split "I'm Divyansh" headline */
   @media (max-width: 639px) {
     .glitch-mobile::before,
     .glitch-mobile::after {
@@ -424,7 +427,6 @@
       0 0 80px -20px oklch(0.97 0 0 / 0.4);
   }
 
-  /* Char-by-char reveal */
   @keyframes char-rise {
     0% {
       opacity: 0;
@@ -443,7 +445,6 @@
     animation: char-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
-  /* Premium After Effects-Style Glitch Effect */
   @keyframes glitch-main-burst {
     0%,
     100% {
@@ -821,7 +822,6 @@
     opacity: 0;
   }
 
-  /* Solid text (Hey there!) glitch copies */
   .glitch::before {
     color: #ff0055;
     text-shadow:
@@ -838,7 +838,6 @@
     mix-blend-mode: screen;
   }
 
-  /* Stroke outlined text (I'm Divyansh) glitch copies */
   .text-outline.glitch::before {
     color: transparent;
     -webkit-text-stroke: 1.5px #ff0055;
@@ -851,7 +850,6 @@
     text-shadow: 0 0 8px rgba(0, 240, 255, 0.35);
   }
 
-  /* Periodic Idle Glitches (State-triggered) */
   .glitch-triggered {
     animation: glitch-main-burst 0.75s linear;
   }
@@ -864,7 +862,6 @@
     animation: glitch-anim-2-burst 0.75s linear;
   }
 
-  /* Hover Interactive Hyper-Glitches */
   .glitch-hoverable:hover {
     animation: glitch-main-hover 0.28s infinite linear !important;
   }
@@ -912,7 +909,6 @@
     }
   }
 
-  /* Scroll-driven section heading underline */
   @keyframes line-grow {
     from {
       transform: scaleX(0);
@@ -943,7 +939,6 @@
     border-color: oklch(0.97 0 0 / 0.25);
   }
 
-  /* monochrome blend-mode cursor — nitinn.dev style */
   html.custom-cursor,
   html.custom-cursor * {
     cursor: none !important;
@@ -954,8 +949,7 @@
   html.custom-cursor [contenteditable] {
     cursor: auto !important;
   }
-  /* Hide the custom pointer while over editable fields so the native
-     I-beam doesn't double up with it. */
+
   html.custom-cursor:has(input:hover, textarea:hover, select:hover, [contenteditable]:hover)
     .portfolio-cursor-pointer {
     display: none;
@@ -978,5 +972,22 @@
     .portfolio-cursor-pointer {
       display: none;
     }
+  }
+}
+
+.min-h-viewport {
+  min-height: 100vh;
+}
+@supports (height: 100svh) {
+  .min-h-viewport {
+    min-height: 100svh;
+  }
+}
+.max-h-85-viewport {
+  max-height: 85vh;
+}
+@supports (height: 85svh) {
+  .max-h-85-viewport {
+    max-height: 85svh;
   }
 }

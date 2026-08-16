@@ -14,7 +14,7 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="relative py-24 sm:py-32 scroll-mt-24">
+    <section id={id} className="relative py-24 sm:py-32 xl:py-36 2xl:py-48 scroll-mt-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="reveal-stagger max-w-2xl mb-14">
           <div className="reveal font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground mb-3 flex items-center gap-3">

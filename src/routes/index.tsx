@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Nav } from "@/components/portfolio/Nav";
 import { SocialPanel } from "@/components/portfolio/SocialPanel";
+import { RightPanel } from "@/components/portfolio/RightPanel";
 import { BackgroundFX } from "@/components/portfolio/BackgroundFX";
 import { Cursor } from "@/components/portfolio/Cursor";
 import { IntroBoot } from "@/components/portfolio/IntroBoot";
@@ -73,6 +74,7 @@ function Index() {
       {!bootDone && <IntroBoot onCloseStart={handleBootCloseStart} onDone={handleBootDone} />}
       <Nav />
       <SocialPanel />
+      <RightPanel />
       <Hero booted={bootClosing} />
       <About />
       <Skills />
