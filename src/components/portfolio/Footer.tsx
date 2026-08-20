@@ -5,11 +5,18 @@ export function Footer() {
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 2rem)" }}
         className="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground"
       >
+        <div className="font-mono">© {new Date().getFullYear()} Divyansh Shakya</div>
         <div className="font-mono">
-          © {new Date().getFullYear()} Divyansh Shakya — built with care.
-        </div>
-        <div className="font-mono">
-          crafted in <span className="text-gradient">vim & vite</span>
+          Crafting open-source software. Feel free to star the repo on{" "}
+          <a
+            href="https://github.com/divyanshakya966/divyansh.dev"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gradient hover:underline"
+          >
+            GitHub
+          </a>
+          !
         </div>
       </div>
     </footer>

@@ -15,7 +15,15 @@ const groups = [
   },
   {
     title: "Security",
-    items: ["DevSecOps", "Pentesting", "Web App Security", "AI Security", "Recon", "TryHackMe"],
+    items: [
+      "DevSecOps",
+      "Pentesting",
+      "Web App Security",
+      "AI Security",
+      "Recon",
+      "TryHackMe",
+      "HackTheBox",
+    ],
   },
 ];
 

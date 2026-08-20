@@ -2,10 +2,17 @@ import { Section } from "./Section";
 
 const items = [
   {
-    when: "May 2026 – Present",
+    when: "August 2026 – Present",
+    title: "Cybersecurity Trainee",
+    where: "HackTheBox",
+    body: "Doing hands-on cybersecurity training on HackTheBox across red teaming and penetration testing with continuously advancing skills through ongoing labs/machines and challenges.",
+    tag: "Cybersecurity",
+  },
+  {
+    when: "May 2026 – July 2026",
     title: "Open Source Contributor",
     where: "GSSoC 2026",
-    body: "Contributing code, documentation, testing and feature improvements across open-source projects. Collaborating with maintainers via Git, GitHub, issues and PRs — exploring AI-integrated systems and secure development practices.",
+    body: "Contributing code, documentation, testing and feature improvements across open-source projects. Collaborating with maintainers via Git, GitHub, issues and PRs.",
     tag: "Open Source",
   },
   {

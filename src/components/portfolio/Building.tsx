@@ -52,7 +52,7 @@ export function Building() {
           <div className="mt-4 space-y-3">
             {[
               { l: "TryHackMe rank", v: "Top 1%" },
-              { l: "GSSoC '26", v: "Contributor" },
+              { l: "Open Source", v: "Contributor" },
               { l: "Hackathon finals", v: "2x" },
             ].map((s) => (
               <div key={s.l} className="flex items-center justify-between text-sm">

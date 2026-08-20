@@ -5,7 +5,7 @@ const cards = [
   {
     icon: Shield,
     title: "Security First",
-    body: "Aspiring security engineer — DevSecOps, pentesting and AI security via hands-on TryHackMe labs.",
+    body: "Aspiring security engineer — DevSecOps, pentesting and AI security via hands-on TryHackMe and HackTheBox labs.",
   },
   {
     icon: Cloud,

@@ -38,6 +38,15 @@ const projects: Project[] = [
     github: "https://github.com/divyanshakya966/SmartCampus",
   },
   {
+    title: "Next-Gen Skillforge",
+    tag: "Full Stack",
+    description:
+      "An AI dashboard that analyzes resumes to generate personalized learning roadmaps.",
+    long: "Next-Gen Skillforge is an AI-powered career intelligence dashboard built with Next.js. It analyzes public profile links and resume content, extracts skill signals, generates role-fit insights, and creates a personalized learning roadmap.",
+    stack: ["Next.js", "React", "Tailwind CSS", "Recharts"],
+    github: "https://github.com/divyanshakya966/Next-Gen-Skillforge",
+  },
+  {
     title: "Discord AI ChatBot",
     tag: "Bots / AI",
     description: "Multipurpose Discord bot with AI chat, moderation utilities and server commands.",
