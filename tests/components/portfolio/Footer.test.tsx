@@ -10,10 +10,13 @@ describe("Footer", () => {
     vi.useRealTimers();
   });
 
-  it("renders the tagline", () => {
+  it("renders the GitHub CTA", () => {
     render(<Footer />);
-    expect(screen.getByText("crafted in")).toBeInTheDocument();
-    expect(screen.getByText("vim & vite")).toBeInTheDocument();
+    expect(screen.getByText(/Crafting open-source software/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+      "href",
+      "https://github.com/divyanshakya966/divyansh.dev",
+    );
   });
 
   it("is a <footer> element", () => {

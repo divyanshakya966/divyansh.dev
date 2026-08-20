@@ -24,7 +24,7 @@ const items = [
   },
   {
     when: "Feb 2026 – Present",
-    title: "Cybersecurity Trainee",
+    title: "Security Trainee",
     where: "TryHackMe",
     body: "Hands-on training across DevSecOps, security engineering, AI security, penetration testing and web application security. Active labs in reconnaissance, vulnerability assessment and controlled exploitation.",
     tag: "Cybersecurity",

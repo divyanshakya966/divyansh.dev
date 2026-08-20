@@ -3,9 +3,10 @@ import { render, screen } from "@testing-library/react";
 import { Experience } from "@/components/portfolio/Experience";
 
 const ITEMS = [
+  { title: "Cybersecurity Trainee", when: "August 2026", where: "HackTheBox" },
   { title: "Open Source Contributor", when: "May 2026", where: "GSSoC 2026" },
   { title: "National Hackathon Finalist · 2x", where: "National Level Hackathons" },
-  { title: "Cybersecurity Trainee", when: "Feb 2026", where: "TryHackMe" },
+  { title: "Security Trainee", when: "Feb 2026", where: "TryHackMe" },
   {
     title: "B.Tech CSE — Cybersecurity",
     where: "Oriental College of Technology, Bhopal",
@@ -30,7 +31,8 @@ describe("Experience", () => {
   it("shows period tags for each entry", () => {
     render(<Experience />);
     for (const label of [
-      "May 2026 – Present · Open Source",
+      "August 2026 – Present · Cybersecurity",
+      "May 2026 – July 2026 · Open Source",
       "Feb 2026 – Present · Cybersecurity",
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument();

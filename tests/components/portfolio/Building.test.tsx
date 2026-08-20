@@ -30,7 +30,7 @@ describe("Building", () => {
 
   it("shows current stats", () => {
     render(<Building />);
-    for (const stat of ["TryHackMe rank", "GSSoC '26", "Hackathon finals"]) {
+    for (const stat of ["TryHackMe rank", "Open Source", "Hackathon finals"]) {
       expect(screen.getByText(stat)).toBeInTheDocument();
     }
     expect(screen.getByText("Top 1%")).toBeInTheDocument();
