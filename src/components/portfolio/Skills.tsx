@@ -3,11 +3,11 @@ import { Section } from "./Section";
 const groups = [
   {
     title: "Languages",
-    items: ["JavaScript", "TypeScript", "C", "C++", "Python", "Bash"],
+    items: ["C/C++", "Python", "Bash"],
   },
   {
     title: "Web & Backend",
-    items: ["Node.js", "Express.js", "React", "REST APIs", "MongoDB"],
+    items: ["AI assisted frontend development", "Backend/API fundamentals"],
   },
   {
     title: "DevSecOps & Cloud",

@@ -4,13 +4,13 @@ import { Skills } from "@/components/portfolio/Skills";
 
 const GROUPS = ["Languages", "Web & Backend", "DevSecOps & Cloud", "Security"];
 const SAMPLE_SKILLS = [
-  "JavaScript",
-  "TypeScript",
+  "C/C++",
   "Python",
-  "React",
+  "AI assisted frontend development",
   "Docker",
   "Kubernetes",
   "TryHackMe",
+  "HackTheBox",
 ];
 
 describe("Skills", () => {

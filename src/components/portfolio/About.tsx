@@ -5,12 +5,12 @@ const cards = [
   {
     icon: Shield,
     title: "Security First",
-    body: "Aspiring security engineer — DevSecOps, pentesting and AI security via hands-on TryHackMe and HackTheBox labs.",
+    body: "Aspiring security engineer — DevSecOps, Pentesting, AI & Cloud Security via hands-on TryHackMe and HackTheBox labs.",
   },
   {
     icon: Cloud,
     title: "Cloud & DevSecOps",
-    body: "Docker, Kubernetes, CI/CD and cloud security fundamentals — shipping safer, faster.",
+    body: "Docker, Kubernetes, CI/CD and Cloud Security fundamentals — shipping safer, faster.",
   },
   {
     icon: Code2,

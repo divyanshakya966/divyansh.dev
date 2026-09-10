@@ -144,8 +144,7 @@ export function Contact() {
               AVAILABLE · Bhopal, India
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Open to cybersecurity, DevSecOps and full-stack internships, hackathons and meaningful
-              OSS work.
+              Open to Cybersecurity and DevSecOps internships, hackathons and meaningful OSS work.
             </p>
           </div>
         </div>
