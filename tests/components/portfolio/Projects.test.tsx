@@ -3,7 +3,14 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Projects } from "@/components/portfolio/Projects";
 
-const PROJECT_TITLES = ["AegisStack", "SmartCampus", "Discord AI ChatBot", "Telegram Mod Bot"];
+const PROJECT_TITLES = [
+  "AegisStack",
+  "SecureContent AI",
+  "SmartCampus",
+  "Next-Gen Skillforge",
+  "Discord AI ChatBot",
+  "Telegram Mod Bot",
+];
 
 describe("Projects", () => {
   it("renders the section header", () => {
@@ -12,7 +19,7 @@ describe("Projects", () => {
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Selected");
   });
 
-  it("renders all four project cards", () => {
+  it("renders all project cards", () => {
     render(<Projects />);
     PROJECT_TITLES.forEach((t) =>
       expect(screen.getByRole("heading", { level: 3, name: t })).toBeInTheDocument(),

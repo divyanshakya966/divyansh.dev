@@ -30,6 +30,15 @@ const projects: Project[] = [
     github: "https://github.com/divyanshakya966/AegisStack",
   },
   {
+    title: "SecureContent AI",
+    tag: "GenAI Security",
+    description:
+      "A GenAI security control plane that protects all inputs, outputs, and training data.",
+    long: "SecureContent AI treats every upload as untrusted data until verified: Ingest → Scan → Classify → Sanitize → Transform → Validate → Deliver. Detects PII, secrets, prompt injection and unsafe URLs, enforces 5 audience-aware policies plus custom OWASP / GDPR / HIPAA / PCI templates, and transforms sources into 15 artefact types (executive summaries, incident reports, policy briefs & more) with output DLP re-validation. Built with Next.js, Prisma, Gemini/Groq and Docker.",
+    stack: ["Next.js", "TypeScript", "Prisma", "Docker"],
+    github: "https://github.com/divyanshakya966/SecureContent-AI",
+  },
+  {
     title: "SmartCampus",
     tag: "Full Stack",
     description: "A campus marketplace where students can buy, sell and exchange items safely.",
