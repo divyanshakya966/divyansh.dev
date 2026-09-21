@@ -23,6 +23,7 @@ export const site = {
     "https://tryhackme.com/p/divyanshakya966",
     "https://profile.hackthebox.com/profile/019c5d4a-8b27-718b-baa5-4597358c866b",
     "https://leetcode.com/u/divyanshakya966",
+    "https://www.credly.com/users/divyansh-shakya.11716562",
     "https://x.com/divyanshakya966",
   ],
   image: "/og-image.png",
