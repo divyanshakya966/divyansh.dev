@@ -19,6 +19,9 @@
  * To bypass the hidden prompt (byte-exact, avoids terminal/paste quirks):
  *    ADMIN_PASSWORD='your-passphrase' npm run admin:create -- --username divyansh --apply-remote
  * (prefix a space so it stays out of shell history; `unset ADMIN_PASSWORD` after)
+ *
+ * To have the script generate a strong password and print it (no typing at all):
+ *   npm run admin:create -- --username divyansh --apply-remote --generate
  */
 import { execSync } from "node:child_process";
 import readline from "node:readline";
@@ -29,12 +32,23 @@ const HASH_BYTES = 32;
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const out = { username: "", applyLocal: false, applyRemote: false };
+  const out = { username: "", applyLocal: false, applyRemote: false, generate: false };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--username" && args[i + 1]) out.username = args[++i].toLowerCase();
     else if (args[i] === "--apply-local") out.applyLocal = true;
     else if (args[i] === "--apply-remote") out.applyRemote = true;
+    else if (args[i] === "--generate") out.generate = true;
   }
+  return out;
+}
+
+const GENERATED_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+
+function randomPassword(length = 20) {
+  // Unambiguous, shell-safe charset: no 0/O, 1/l/I, quotes, $ or !.
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  let out = "";
+  for (const b of bytes) out += GENERATED_ALPHABET[b % GENERATED_ALPHABET.length];
   return out;
 }
 
@@ -98,7 +112,7 @@ function sqlEscape(s) {
 }
 
 async function main() {
-  const { username: flagUser, applyLocal, applyRemote } = parseArgs();
+  const { username: flagUser, applyLocal, applyRemote, generate } = parseArgs();
   let username = normalizeUsername(flagUser);
   if (!username) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -115,7 +129,15 @@ async function main() {
 
   const passwordFromEnv = process.env.ADMIN_PASSWORD;
   let password;
-  if (typeof passwordFromEnv === "string" && passwordFromEnv.length > 0) {
+  let generated = false;
+  if (generate) {
+    // Machine-generated: no typing, no shell quoting, no paste quirks on the
+    // creation side. Printed visibly so you can copy it into the browser.
+    password = randomPassword(20);
+    generated = true;
+    console.log("\nGenerated admin password (copy it now, store in a password manager):");
+    console.log(`  ${password}\n`);
+  } else if (typeof passwordFromEnv === "string" && passwordFromEnv.length > 0) {
     // Byte-exact path: bypasses terminal input entirely (no masking, no
     // pasting quirks). Run as: `ADMIN_PASSWORD='...' npm run admin:create ...`
     // with a leading space so it stays out of shell history, then unset it.
@@ -128,8 +150,8 @@ async function main() {
     console.error("Password must be 12–256 characters.");
     process.exit(1);
   }
-  if (typeof passwordFromEnv === "string" && passwordFromEnv.length > 0) {
-    console.log("Skipping confirmation (env-provided password).");
+  if (generated || (typeof passwordFromEnv === "string" && passwordFromEnv.length > 0)) {
+    console.log("Skipping confirmation (generated/env-provided password).");
   } else {
     const confirm = await promptSecret("Confirm password: ");
     if (confirm !== password) {
