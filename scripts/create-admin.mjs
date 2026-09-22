@@ -15,6 +15,10 @@
  *   npm run admin:create -- --username divyansh --apply-local
  * To apply to remote D1:
  *   npm run admin:create -- --username divyansh --apply-remote
+ *
+ * To bypass the hidden prompt (byte-exact, avoids terminal/paste quirks):
+ *    ADMIN_PASSWORD='your-passphrase' npm run admin:create -- --username divyansh --apply-remote
+ * (prefix a space so it stays out of shell history; `unset ADMIN_PASSWORD` after)
  */
 import { execSync } from "node:child_process";
 import readline from "node:readline";
@@ -42,24 +46,23 @@ function normalizeUsername(v) {
 }
 
 function promptSecret(question) {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: true,
-  });
+  // Suppress echo via readline's own output hook. No extra stream listeners:
+  // attaching 'data' handlers to process.stdin races readline's raw-mode
+  // reader and can corrupt pasted input (the stored password then differs
+  // from what was typed, failing login despite a matching confirmation).
   return new Promise((resolve) => {
-    // Hide input while typing where possible.
-    const stdin = process.stdin;
-    const onData = (ch) => {
-      const c = ch.toString();
-      if (c === "\n" || c === "\r" || c === "\u0004") return;
-      process.stdout.clearLine?.(0);
-      process.stdout.cursorTo?.(0);
-      process.stdout.write(question + "*".repeat(rl.line?.length ?? 0));
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: true,
+    });
+    const originalWrite = rl._writeToOutput.bind(rl);
+    rl._writeToOutput = (chunk) => {
+      const s = chunk.toString();
+      if (s === "\r\n" || s === "\n" || s === "\r") originalWrite(chunk);
+      // else: swallow (keeps the password hidden without touching the stream)
     };
-    stdin.on("data", onData);
     rl.question(question, (answer) => {
-      stdin.off("data", onData);
       rl.close();
       process.stdout.write("\n");
       resolve(answer);
@@ -110,15 +113,29 @@ async function main() {
     }
   }
 
-  const password = await promptSecret("Admin password (12+ chars, hidden): ");
+  const passwordFromEnv = process.env.ADMIN_PASSWORD;
+  let password;
+  if (typeof passwordFromEnv === "string" && passwordFromEnv.length > 0) {
+    // Byte-exact path: bypasses terminal input entirely (no masking, no
+    // pasting quirks). Run as: `ADMIN_PASSWORD='...' npm run admin:create ...`
+    // with a leading space so it stays out of shell history, then unset it.
+    password = passwordFromEnv;
+    console.log("Using password from ADMIN_PASSWORD env (unset it afterwards).");
+  } else {
+    password = await promptSecret("Admin password (12+ chars, hidden): ");
+  }
   if (typeof password !== "string" || password.length < 12 || password.length > 256) {
     console.error("Password must be 12–256 characters.");
     process.exit(1);
   }
-  const confirm = await promptSecret("Confirm password: ");
-  if (confirm !== password) {
-    console.error("Passwords do not match.");
-    process.exit(1);
+  if (typeof passwordFromEnv === "string" && passwordFromEnv.length > 0) {
+    console.log("Skipping confirmation (env-provided password).");
+  } else {
+    const confirm = await promptSecret("Confirm password: ");
+    if (confirm !== password) {
+      console.error("Passwords do not match.");
+      process.exit(1);
+    }
   }
 
   const { hash, salt } = await hashPassword(password);
