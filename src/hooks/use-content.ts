@@ -19,9 +19,15 @@ export function usePublicContent(kind: ContentKind): ContentState {
       try {
         const res = await fetch(`/api/content?kind=${kind}`, { credentials: "same-origin" });
         if (!res.ok) return;
-        const data = (await res.json()) as { items?: ContentItem[] };
+        const data = (await res.json()) as { items?: ContentItem[]; source?: string };
         if (!cancelled && Array.isArray(data.items)) {
-          setItems(data.items);
+          // Never blank visible content on an ambiguous empty answer: only
+          // adopt [] when the server confirms it owns the kind (source db —
+          // i.e. the admin deliberately hid everything). Seed/empty sources
+          // with [] mean "nothing to show", which matches what we render.
+          if (data.items.length > 0 || data.source === "db" || items.length === 0) {
+            setItems(data.items);
+          }
         }
       } catch {
         // Keep seeds on network failure.
@@ -33,6 +39,8 @@ export function usePublicContent(kind: ContentKind): ContentState {
     return () => {
       cancelled = true;
     };
+    // items.length is read once for the initial guard; the fetch replaces it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
 
   return { items, loading };

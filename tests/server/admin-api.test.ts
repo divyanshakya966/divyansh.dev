@@ -196,6 +196,26 @@ function cookieFrom(res: Response): string {
   return setCookie.split(";")[0] ?? "";
 }
 
+async function apiImportSeed(
+  db: FakeD1,
+  auth: { cookie: string },
+  ip: string,
+  kind: string,
+  expectedStatus = 201,
+) {
+  const res = await server.fetch(
+    req(
+      "/api/admin/seed-import",
+      { method: "POST", body: JSON.stringify({ kind }), headers: auth },
+      ip,
+    ),
+    { DB: db },
+    {},
+  );
+  expect(res.status).toBe(expectedStatus);
+  return res;
+}
+
 beforeEach(() => {
   delete process.env.ADMIN_USERNAME;
   delete process.env.ADMIN_PASSWORD_HASH;
@@ -597,16 +617,62 @@ describe("full-portfolio control: projects, settings, generalized seeds", () => 
 
   it("serves seed projects/experience publicly until D1 rows exist", async () => {
     const db = new FakeD1();
-    const projects = (await (
-      await server.fetch(req("/api/content?kind=project"), { DB: db }, {})
-    ).json()) as { items: { title: string; tags: string[] }[] };
+    const res = await server.fetch(req("/api/content?kind=project"), { DB: db }, {});
+    const projects = (await res.json()) as {
+      items: { title: string; tags: string[] }[];
+      source: string;
+    };
     expect(projects.items).toHaveLength(6);
     expect(projects.items[0]).toMatchObject({ title: "AegisStack" });
+    expect(projects.source).toBe("seed");
+    expect(res.headers.get("cache-control")).toContain("max-age");
 
     const exp = (await (
       await server.fetch(req("/api/content?kind=experience"), { DB: db }, {})
     ).json()) as { items: { title: string }[] };
     expect(exp.items).toHaveLength(5);
+  });
+
+  it("marks deliberate hides as db-sourced and never caches empties", async () => {
+    const { db, auth, ipBase } = await authedDb("10.0.6.5");
+    // Seed skill rows exist publicly first.
+    const before = await server.fetch(req("/api/content?kind=skill"), { DB: db }, {});
+    expect(((await before.json()) as { source: string }).source).toBe("seed");
+
+    await apiImportSeed(db, auth, ipBase, "skill");
+    // Hide every skill row.
+    const listed = (await (
+      await server.fetch(
+        req("/api/admin/items?kind=skill", { headers: auth }, ipBase),
+        { DB: db },
+        {},
+      )
+    ).json()) as { items: { id: number }[] };
+    for (const it of listed.items) {
+      const row = (db.items.find((i) => i.id === it.id) ?? {}) as Record<string, unknown>;
+      await server.fetch(
+        req(
+          `/api/admin/items/${it.id}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              kind: "skill",
+              title: String(row.title ?? "t"),
+              tags: row.tags ?? [],
+              is_visible: false,
+            }),
+            headers: auth,
+          },
+          ipBase,
+        ),
+        { DB: db },
+        {},
+      );
+    }
+    const hidden = await server.fetch(req("/api/content?kind=skill"), { DB: db }, {});
+    const body = (await hidden.json()) as { items: unknown[]; source: string };
+    expect(body).toEqual({ items: [], source: "db" });
+    expect(hidden.headers.get("cache-control")).toBe("no-store");
   });
 
   it("project CRUD round-trips meta (long + demo) to the public site", async () => {

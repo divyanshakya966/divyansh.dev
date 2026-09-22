@@ -383,40 +383,47 @@ function publicCacheHeaders(): HeadersInit {
   return { "cache-control": "public, max-age=60, s-maxage=300" };
 }
 
+function noStoreHeaders(): HeadersInit {
+  return { "cache-control": "no-store" };
+}
+
 const CONTENT_COLUMNS =
   "id, kind, title, subtitle, description, url, image, tags, meta, sort_order, is_visible, created_at, updated_at";
+
+export type ContentSource = "db" | "seed" | "empty";
 
 async function queryVisibleContent(
   db: D1Database | null,
   kind: ContentKind,
-): Promise<ContentItem[]> {
+): Promise<{ items: ContentItem[]; source: ContentSource }> {
+  // Single-statement snapshot: visible rows AND the total count must come
+  // from the same read, otherwise two sequential queries can straddle D1
+  // replication states (visible=∅ on a stale replica, count>0 fresh) and
+  // briefly report an empty section that never existed.
+  const snapshot = (rows: ContentItem[]): { items: ContentItem[]; source: ContentSource } => {
+    const visible = sortContent(rows.filter((r) => r.is_visible));
+    if (visible.length > 0) return { items: visible, source: "db" };
+    if (rows.length > 0) return { items: [], source: "db" }; // admin hid everything: respect it
+    const seeds = SEEDS[kind].filter((s) => s.is_visible);
+    return seeds.length > 0 ? { items: seeds, source: "seed" } : { items: [], source: "empty" };
+  };
+
   if (db) {
     try {
       const res = await db
         .prepare(
-          `SELECT ${CONTENT_COLUMNS} FROM content_items WHERE kind = ? AND is_visible = 1 ORDER BY sort_order ASC, id ASC`,
+          `SELECT ${CONTENT_COLUMNS} FROM content_items WHERE kind = ? ORDER BY sort_order ASC, id ASC`,
         )
         .bind(kind)
         .all<Record<string, unknown>>();
-      const items = sortContent(res.results.map(rowToContentItem));
-      if (items.length > 0) return items;
-      // No visible rows: distinguish "admin hid everything" (respect it)
-      // from "admin never added this kind" (serve seeds for seeded kinds).
-      const count = await db
-        .prepare("SELECT COUNT(*) as count FROM content_items WHERE kind = ?")
-        .bind(kind)
-        .first<{ count: number }>();
-      if ((count?.count ?? 0) > 0) return [];
-      return SEEDS[kind].filter((s) => s.is_visible);
+      return snapshot(res.results.map(rowToContentItem));
     } catch (error) {
       console.error("D1 content query failed, falling back to seed", error);
     }
   }
   seedFallbackContent();
-  return sortContent(
-    [...fallbackContent.values()]
-      .filter((r) => r.kind === kind && Number(r.is_visible) === 1)
-      .map(rowToContentItem),
+  return snapshot(
+    [...fallbackContent.values()].filter((r) => r.kind === kind).map(rowToContentItem),
   );
 }
 
@@ -464,8 +471,15 @@ async function handleContentRequest(request: Request, env: unknown): Promise<Res
   if (!kindParam || !isContentKind(kindParam)) {
     return jsonResponse({ error: "Invalid kind. Use one of: " + CONTENT_KINDS.join(", ") }, 400);
   }
-  const items = await queryVisibleContent(getDb(env), kindParam);
-  return jsonResponse({ items }, 200, publicCacheHeaders());
+  const { items, source } = await queryVisibleContent(getDb(env), kindParam);
+  // Never cache an empty answer: a transient empty read must not poison the
+  // edge/browser cache and blank sections on reload. Non-empty answers carry
+  // the source so clients can tell deliberate admin-hides (db) apart.
+  return jsonResponse(
+    { items, source },
+    200,
+    items.length > 0 ? publicCacheHeaders() : noStoreHeaders(),
+  );
 }
 
 type AdminUser = { id: number; username: string };
