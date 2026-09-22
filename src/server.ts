@@ -86,6 +86,10 @@ const DEFAULT_RATE_LIMIT_MAX = 5;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_RATE_LIMIT_MAX = 5;
 const LOGIN_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+// DoS guard: every JSON endpoint shares this cap (largest legit payload is a
+// few KB — description 4000 + meta 4000 + tags). Oversized bodies are
+// rejected before JSON.parse ever runs.
+const MAX_JSON_BYTES = 64 * 1024;
 const GENERIC_AUTH_ERROR = "Invalid username or password.";
 // Fixed dummy PBKDF2 operands: burned on every unknown-user login so valid
 // and invalid usernames take the same time (timing-oracle defence).
@@ -131,10 +135,34 @@ function seedFallbackContent() {
   }
 }
 
+function securityHeaders(): HeadersInit {
+  return {
+    // Clickjacking defence for /admin (no legitimate framing anywhere).
+    "content-security-policy": "frame-ancestors 'self'",
+    "x-frame-options": "SAMEORIGIN",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "same-origin",
+  };
+}
+
+function withSecurityHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [k, v] of Object.entries(securityHeaders())) headers.set(k, v);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 function jsonResponse(payload: unknown, status = 200, extraHeaders?: HeadersInit): Response {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", ...(extraHeaders ?? {}) },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      ...securityHeaders(),
+      ...(extraHeaders ?? {}),
+    },
   });
 }
 
@@ -153,6 +181,7 @@ function sitemapResponse(): Response {
     headers: {
       "content-type": "application/xml; charset=utf-8",
       "cache-control": "public, max-age=0, must-revalidate",
+      ...securityHeaders(),
     },
   });
 }
@@ -170,6 +199,7 @@ Sitemap: ${site.url}/sitemap.xml
     headers: {
       "content-type": "text/plain; charset=utf-8",
       "cache-control": "public, max-age=0, must-revalidate",
+      ...securityHeaders(),
     },
   });
 }
@@ -311,14 +341,12 @@ async function handleContactRequest(request: Request, env: unknown): Promise<Res
   if (request.method !== "POST") {
     return new Response("Method not allowed", {
       status: 405,
-      headers: { allow: "POST" },
+      headers: { allow: "POST", ...securityHeaders() },
     });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
+  const body = await readJson(request);
+  if (body === undefined) {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
@@ -371,9 +399,47 @@ async function handleContactRequest(request: Request, env: unknown): Promise<Res
 
 /* ---------------- Content + Admin APIs ---------------- */
 
+/** Stream-capped body read: never buffer more than maxBytes into memory. */
+async function readBodyTextCapped(request: Request, maxBytes: number): Promise<string | null> {
+  try {
+    if (!request.body) {
+      const text = await request.text();
+      return text.length <= maxBytes ? text : null;
+    }
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maxBytes) {
+          await reader.cancel().catch(() => {});
+          return null;
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const buf = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      buf.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return new TextDecoder().decode(buf);
+  } catch {
+    return null;
+  }
+}
+
 async function readJson(request: Request): Promise<unknown> {
   try {
-    return await request.json();
+    const text = await readBodyTextCapped(request, MAX_JSON_BYTES);
+    if (text === null) return undefined;
+    return JSON.parse(text);
   } catch {
     return undefined;
   }
@@ -464,7 +530,10 @@ async function queryAllContent(
 
 async function handleContentRequest(request: Request, env: unknown): Promise<Response> {
   if (request.method !== "GET") {
-    return new Response("Method not allowed", { status: 405, headers: { allow: "GET" } });
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: { allow: "GET", ...securityHeaders() },
+    });
   }
   const url = new URL(request.url);
   const kindParam = url.searchParams.get("kind");
@@ -747,7 +816,10 @@ async function handleAdminItems(request: Request, env: unknown, url: URL): Promi
     return jsonResponse({ ok: true, id }, 201);
   }
 
-  return new Response("Method not allowed", { status: 405, headers: { allow: "GET, POST" } });
+  return new Response("Method not allowed", {
+    status: 405,
+    headers: { allow: "GET, POST", ...securityHeaders() },
+  });
 }
 
 async function handleAdminItemById(
@@ -832,7 +904,10 @@ async function handleAdminItemById(
     return jsonResponse({ ok: true });
   }
 
-  return new Response("Method not allowed", { status: 405, headers: { allow: "PUT, DELETE" } });
+  return new Response("Method not allowed", {
+    status: 405,
+    headers: { allow: "PUT, DELETE", ...securityHeaders() },
+  });
 }
 
 async function handleAdminReorder(request: Request, env: unknown): Promise<Response> {
@@ -969,7 +1044,10 @@ async function readSettings(db: D1Database | null): Promise<Record<string, strin
 
 async function handleSettingsRequest(request: Request, env: unknown): Promise<Response> {
   if (request.method !== "GET") {
-    return new Response("Method not allowed", { status: 405, headers: { allow: "GET" } });
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: { allow: "GET", ...securityHeaders() },
+    });
   }
   const settings = await readSettings(getDb(env));
   return jsonResponse({ settings }, 200, publicCacheHeaders());
@@ -1008,7 +1086,10 @@ async function handleAdminSettings(request: Request, env: unknown): Promise<Resp
     return jsonResponse({ ok: true });
   }
 
-  return new Response("Method not allowed", { status: 405, headers: { allow: "GET, PUT" } });
+  return new Response("Method not allowed", {
+    status: 405,
+    headers: { allow: "GET, PUT", ...securityHeaders() },
+  });
 }
 
 async function handleAdminSettingDelete(
@@ -1122,11 +1203,23 @@ async function handleAdminRequest(request: Request, env: unknown): Promise<Respo
   }
   const itemMatch = path.match(/^\/api\/admin\/items\/([^/]+)$/);
   if (itemMatch && (request.method === "PUT" || request.method === "DELETE")) {
-    return handleAdminItemById(request, env, decodeURIComponent(itemMatch[1]!));
+    let idStr: string;
+    try {
+      idStr = decodeURIComponent(itemMatch[1]!);
+    } catch {
+      return jsonResponse({ error: "Invalid id encoding." }, 400);
+    }
+    return handleAdminItemById(request, env, idStr);
   }
   const settingMatch = path.match(/^\/api\/admin\/settings\/([^/]+)$/);
   if (settingMatch && request.method === "DELETE") {
-    return handleAdminSettingDelete(request, env, decodeURIComponent(settingMatch[1]!));
+    let key: string;
+    try {
+      key = decodeURIComponent(settingMatch[1]!);
+    } catch {
+      return jsonResponse({ error: "Invalid key encoding." }, 400);
+    }
+    return handleAdminSettingDelete(request, env, key);
   }
   return jsonResponse({ error: "Not found." }, 404);
 }
@@ -1144,7 +1237,7 @@ async function getServerEntry(): Promise<ServerEntry> {
 function brandedErrorResponse(): Response {
   return new Response(renderErrorPage(), {
     status: 500,
-    headers: { "content-type": "text/html; charset=utf-8" },
+    headers: { "content-type": "text/html; charset=utf-8", ...securityHeaders() },
   });
 }
 
@@ -1219,7 +1312,8 @@ export default {
 
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      const normalized = await normalizeCatastrophicSsrResponse(response);
+      return withSecurityHeaders(normalized);
     } catch (error) {
       console.error(error);
       return brandedErrorResponse();

@@ -157,14 +157,19 @@ export function validateContentInput(
     return { ok: false, error: `Invalid kind. Use one of: ${CONTENT_KINDS.join(", ")}.` };
   }
   const title = typeof data.title === "string" ? data.title.trim() : "";
-  if (!title || title.length > MAX_TITLE) {
-    return { ok: false, error: "Title is required (max 160 chars)." };
+  if (!title) return { ok: false, error: "Title is required." };
+  if (title.length > MAX_TITLE) {
+    return { ok: false, error: `Title is too long (max ${MAX_TITLE} chars).` };
   }
 
-  const subtitle =
-    typeof data.subtitle === "string" ? data.subtitle.trim().slice(0, MAX_SUBTITLE) : "";
-  const description =
-    typeof data.description === "string" ? data.description.trim().slice(0, MAX_DESCRIPTION) : "";
+  const subtitle = typeof data.subtitle === "string" ? data.subtitle.trim() : "";
+  if (subtitle.length > MAX_SUBTITLE) {
+    return { ok: false, error: `Subtitle is too long (max ${MAX_SUBTITLE} chars).` };
+  }
+  const description = typeof data.description === "string" ? data.description.trim() : "";
+  if (description.length > MAX_DESCRIPTION) {
+    return { ok: false, error: `Description is too long (max ${MAX_DESCRIPTION} chars).` };
+  }
   const url = typeof data.url === "string" ? cleanUrl(data.url) : "";
   const image = typeof data.image === "string" ? cleanUrl(data.image) : "";
 
@@ -177,12 +182,18 @@ export function validateContentInput(
         : null;
     if (raw === null)
       return { ok: false, error: "Tags must be an array or comma-separated string." };
-    tags = raw
+    const cleaned = raw
       .filter((t): t is string => typeof t === "string")
       .map((t) => t.trim())
-      .filter(Boolean)
-      .slice(0, MAX_TAGS)
-      .map((t) => t.slice(0, MAX_TAG_LEN));
+      .filter(Boolean);
+    const tooLong = cleaned.find((t) => t.length > MAX_TAG_LEN);
+    if (tooLong) {
+      return {
+        ok: false,
+        error: `Tag "${tooLong.slice(0, 32)}…" is too long (max ${MAX_TAG_LEN} chars).`,
+      };
+    }
+    tags = cleaned.slice(0, MAX_TAGS);
   }
 
   let meta: Record<string, unknown> = {};

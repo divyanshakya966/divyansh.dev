@@ -87,6 +87,18 @@ describe("content model", () => {
     expect(validateContentInput({ kind: "blog", title: "t", sort_order: "NaN" }).ok).toBe(false);
   });
 
+  it("rejects over-long fields instead of silently truncating", () => {
+    expect(validateContentInput({ kind: "blog", title: "t", subtitle: "s".repeat(161) }).ok).toBe(
+      false,
+    );
+    expect(
+      validateContentInput({ kind: "blog", title: "t", description: "d".repeat(4001) }).ok,
+    ).toBe(false);
+    expect(
+      validateContentInput({ kind: "blog", title: "t", tags: ["ok", "x".repeat(49)] }).ok,
+    ).toBe(false);
+  });
+
   it("maps D1 rows to items", () => {
     const item = rowToContentItem({
       id: 7,

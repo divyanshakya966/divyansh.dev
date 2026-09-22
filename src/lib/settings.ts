@@ -181,7 +181,10 @@ export function validateSettingValue(
   const def = settingDef(key);
   if (!def) return { ok: false, error: "Unknown setting key." };
   if (typeof value !== "string") return { ok: false, error: "Value must be a string." };
-  const v = value.slice(0, MAX_SETTING_LEN);
+  if (value.length > MAX_SETTING_LEN) {
+    return { ok: false, error: `Value is too long (max ${MAX_SETTING_LEN} chars).` };
+  }
+  const v = value;
   if (def.type === "boolean" && v !== "0" && v !== "1") {
     return { ok: false, error: "Boolean settings must be 0 or 1." };
   }

@@ -607,6 +607,68 @@ describe("admin API with D1", () => {
   });
 });
 
+describe("hardening: body caps, encoding guards, security headers", () => {
+  it("rejects oversized JSON bodies before parsing", async () => {
+    const big = "x".repeat(70 * 1024);
+    const contact = await server.fetch(
+      req("/api/contact", {
+        method: "POST",
+        body: JSON.stringify({ name: "n", email: "a@b.co", message: big }),
+      }),
+      {},
+      {},
+    );
+    expect(contact.status).toBe(400);
+
+    const db = new FakeD1();
+    await seedAdmin(db, "divyansh", "correct-horse-battery-99");
+    const cookie = cookieFrom(await login(db, "divyansh", "correct-horse-battery-99", "10.0.7.1"));
+    const bigItem = await server.fetch(
+      req(
+        "/api/admin/items",
+        {
+          method: "POST",
+          body: JSON.stringify({ kind: "blog", title: "t", description: big }),
+          headers: { cookie },
+        },
+        "10.0.7.1",
+      ),
+      { DB: db },
+      {},
+    );
+    expect(bigItem.status).toBe(400);
+  });
+
+  it("returns 400 (not 500) for malformed URL encodings", async () => {
+    const db = new FakeD1();
+    await seedAdmin(db, "divyansh", "correct-horse-battery-99");
+    const cookie = cookieFrom(await login(db, "divyansh", "correct-horse-battery-99", "10.0.7.2"));
+    const bad = await server.fetch(
+      req("/api/admin/items/%E0%A4%A", { method: "DELETE", headers: { cookie } }, "10.0.7.2"),
+      { DB: db },
+      {},
+    );
+    // Either 400 (guard) or 404 (router normalization) — never a 500 crash page.
+    expect([400, 404]).toContain(bad.status);
+    expect(bad.headers.get("content-type")).toContain("application/json");
+  });
+
+  it("sends clickjacking/sniffing guards on API responses", async () => {
+    const denied = await server.fetch(
+      req("/api/admin/login", { method: "POST", body: JSON.stringify({}) }, "10.0.7.3"),
+      {},
+      {},
+    );
+    expect(denied.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(denied.headers.get("content-security-policy")).toBe("frame-ancestors 'self'");
+    expect(denied.headers.get("x-frame-options")).toBe("SAMEORIGIN");
+    expect(denied.headers.get("referrer-policy")).toBe("same-origin");
+
+    const robots = await server.fetch(req("/robots.txt"), {}, {});
+    expect(robots.headers.get("x-frame-options")).toBe("SAMEORIGIN");
+  });
+});
+
 describe("full-portfolio control: projects, settings, generalized seeds", () => {
   async function authedDb(ipBase: string) {
     const db = new FakeD1();

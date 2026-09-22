@@ -49,6 +49,7 @@ describe("site settings", () => {
     expect(validateSettingValue("contact_email", "bad").ok).toBe(false);
     expect(validateSettingValue("contact_email", "a@b.co").ok).toBe(true);
     expect(validateSettingValue("hero_roles", "  \n ").ok).toBe(false);
+    expect(validateSettingValue("contact_blurb", "x".repeat(2001)).ok).toBe(false);
     expect(SETTING_DEFS.length).toBeGreaterThan(15);
   });
 });

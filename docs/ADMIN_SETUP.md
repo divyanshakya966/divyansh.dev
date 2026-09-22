@@ -98,6 +98,14 @@ Meta is a JSON object (max 4000 chars); the editor validates it before saving.
 - Login rate limit: 5 attempts / 10 min per IP (per edge isolate); generic
   error messages plus dummy-PBKDF2 timing equalization (no user enumeration
   by message or timing); CSRF origin check on login and all cookie-authed writes.
+- Transport hardening on every response: `frame-ancestors 'self'` (+ legacy
+  `X-Frame-Options`, clickjacking defence for `/admin`), `nosniff`,
+  `same-origin` referrer policy. No CORS headers are ever set (same-origin only).
+- DoS guards: all JSON bodies capped at 64 KB (stream-capped read, rejected
+  before parse); reorder/import capped at 200 rows; sort/tag/meta lengths
+  bounded; over-long fields are rejected with 400s, never silently truncated.
+- All D1 access is parameterized; crypto failures are logged server-side,
+  never fail open, and never leak material to clients.
 - No public signup — admins are created only via the CLI script.
 - `/admin` is `noindex`, and `robots.txt` disallows `/admin` + `/api/admin/`.
 
