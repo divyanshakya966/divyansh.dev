@@ -3,7 +3,8 @@
  * Create / rotate the portfolio admin user.
  *
  * Uses the SAME PBKDF2-SHA256 parameters as src/lib/admin-auth.ts
- * (WebCrypto, 120k iterations) so hashes verify on Workers.
+ * (WebCrypto, 100k iterations — the Cloudflare Workers maximum) so hashes
+ * verify on Workers.
  *
  * Usage:
  *   npm run admin:create -- --username divyansh
@@ -26,7 +27,7 @@
 import { execSync } from "node:child_process";
 import readline from "node:readline";
 
-const ITERATIONS = 120_000;
+const ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BYTES = 32;
 

@@ -5,12 +5,18 @@ import {
   hashPassword,
   isAllowedAdminOrigin,
   normalizeUsername,
+  PBKDF2_ITERATIONS,
   timingSafeEqualHex,
   validateNewPassword,
   verifyPassword,
 } from "@/lib/admin-auth";
 
 describe("admin-auth", () => {
+  it("stays within the Cloudflare Workers PBKDF2 cap (100k iterations)", () => {
+    // Production workerd throws NotSupportedError above 100000, which turns
+    // every login into a 401. This test fails the build before that recurs.
+    expect(PBKDF2_ITERATIONS).toBeLessThanOrEqual(100_000);
+  });
   it("hashes and verifies passwords with salt", async () => {
     const { hash, salt } = await hashPassword("supersecret-password-123");
     expect(hash).toMatch(/^[0-9a-f]{64}$/);

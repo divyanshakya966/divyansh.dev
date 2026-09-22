@@ -9,7 +9,10 @@
 
 export const SESSION_COOKIE = "admin_session";
 export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
-const PBKDF2_ITERATIONS = 120_000;
+// Cloudflare Workers rejects PBKDF2 iteration counts above 100000
+// (NotSupportedError), while Node allows more. Stay at the cap so hashes
+// created anywhere verify everywhere. Do NOT raise without a runtime check.
+export const PBKDF2_ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BYTES = 32;
 const MIN_PASSWORD_LEN = 12;
@@ -64,7 +67,10 @@ export async function verifyPassword(
   try {
     const { hash } = await hashPassword(password, saltHex);
     return timingSafeEqualHex(hash, expectedHashHex);
-  } catch {
+  } catch (error) {
+    // Never fail open — but never fail silently either: a crypto outage
+    // (e.g. unsupported params) would otherwise masquerade as wrong passwords.
+    console.error("Admin password verification error:", error);
     return false;
   }
 }

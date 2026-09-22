@@ -35,7 +35,7 @@ npm run admin:create -- --username divyansh --apply-remote
 ```
 
 The script prompts for a password (12+ chars, hidden), hashes it with
-PBKDF2-SHA256 (120k iterations, random 16-byte salt — same code as
+PBKDF2-SHA256 (100k iterations — the Cloudflare Workers maximum, random 16-byte salt — same code as
 `src/lib/admin-auth.ts`), and upserts it into D1. Without `--apply-*` it
 prints the SQL + `.dev.vars` fallback values instead.
 
@@ -59,7 +59,7 @@ Nav links for Research/Blogs appear automatically once published.
 
 ## Security model (strict by default)
 
-- PBKDF2-SHA256, 120k iterations, per-user salt; constant-time compare.
+- PBKDF2-SHA256, 100k iterations — the Cloudflare Workers maximum, per-user salt; constant-time compare.
 - Sessions: 32-byte opaque token, only `SHA-256(token)` stored; cookie is
   `httpOnly`, `Secure` (https), `SameSite=Lax`, 12h expiry.
 - Login rate limit: 5 attempts / 10 min per IP; generic error messages plus

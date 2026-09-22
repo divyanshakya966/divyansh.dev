@@ -931,30 +931,6 @@ async function handleAdminSeedImport(request: Request, env: unknown): Promise<Re
   }
 }
 
-// TEMPORARY login diagnostic — REMOVE after debugging (see _diag route).
-// Exposes only: a PBKDF2 of a fixed public input (reveals runtime crypto
-// behavior, zero credential material) and the first 8 hex chars of the
-// stored admin hash (32-bit hint, useless for offline cracking).
-async function handleAdminDiag(env: unknown): Promise<Response> {
-  const { hash } = await hashPassword("diag-vector-password", "00112233445566778899aabbccddeeff");
-  let rowPrefix: string | null = null;
-  const db = getDb(env);
-  if (db) {
-    try {
-      const row = await db
-        .prepare("SELECT password_hash FROM admin_users WHERE username = ?")
-        .bind("divyansh")
-        .first<{ password_hash: string }>();
-      if (row && typeof row.password_hash === "string") {
-        rowPrefix = row.password_hash.slice(0, 8);
-      }
-    } catch (error) {
-      console.error("Diag row lookup failed", error);
-    }
-  }
-  return jsonResponse({ vector_hash: hash, row_prefix: rowPrefix, db: Boolean(db) });
-}
-
 async function handleAdminPassword(request: Request, env: unknown): Promise<Response> {
   const user = await requireAdmin(request, env);
   if (user instanceof Response) return user;
@@ -1024,10 +1000,6 @@ async function handleAdminRequest(request: Request, env: unknown): Promise<Respo
   }
   if (path === "/api/admin/seed-import" && request.method === "POST") {
     return handleAdminSeedImport(request, env);
-  }
-  // TEMPORARY login diagnostic — REMOVE after debugging.
-  if (path === "/api/admin/_diag" && request.method === "GET") {
-    return handleAdminDiag(env);
   }
   if (path === "/api/admin/password" && (request.method === "PUT" || request.method === "POST")) {
     return handleAdminPassword(request, env);
