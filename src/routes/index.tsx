@@ -13,6 +13,9 @@ import { Skills } from "@/components/portfolio/Skills";
 import { Projects } from "@/components/portfolio/Projects";
 import { Experience } from "@/components/portfolio/Experience";
 import { Achievements } from "@/components/portfolio/Achievements";
+import { Certifications } from "@/components/portfolio/Certifications";
+import { Research } from "@/components/portfolio/Research";
+import { Blogs } from "@/components/portfolio/Blogs";
 import { Building } from "@/components/portfolio/Building";
 import { Contact } from "@/components/portfolio/Contact";
 import { Footer } from "@/components/portfolio/Footer";
@@ -80,8 +83,11 @@ function Index() {
       <Skills />
       <Projects />
       <Experience />
+      <Certifications />
       <Achievements />
       <Building />
+      <Research />
+      <Blogs />
       <Contact />
       <Footer />
       <Toaster richColors position="bottom-right" />

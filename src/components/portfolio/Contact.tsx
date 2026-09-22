@@ -55,7 +55,7 @@ export function Contact() {
   return (
     <Section
       id="contact"
-      eyebrow="07 / Contact"
+      eyebrow="10 / Contact"
       title={
         <>
           Let's <span className="text-gradient">build</span> something.

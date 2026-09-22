@@ -12,7 +12,7 @@ const ITEMS = [
 describe("Achievements", () => {
   it("renders the section header", () => {
     render(<Achievements />);
-    expect(screen.getByText("05 / Achievements")).toBeInTheDocument();
+    expect(screen.getByText("06 / Achievements")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Highlights &");
   });
 

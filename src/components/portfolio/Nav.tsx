@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 
-const links = [
+const baseLinks = [
   { href: "#about", label: "About" },
   { href: "#skills", label: "Skills" },
   { href: "#projects", label: "Projects" },
   { href: "#experience", label: "Experience" },
+  { href: "#certifications", label: "Certifications" },
   { href: "#achievements", label: "Achievements" },
   { href: "#building", label: "Building" },
   { href: "#contact", label: "Contact" },
@@ -53,8 +54,10 @@ export function Nav() {
   const [active, setActive] = useState("");
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [dynamicLinks, setDynamicLinks] = useState<{ href: string; label: string }[]>([]);
   const typed = useTypewriter();
   const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const links = [...baseLinks.slice(0, 7), ...dynamicLinks, baseLinks[baseLinks.length - 1]!];
 
   useEffect(() => {
     if (!open) return;
@@ -77,6 +80,32 @@ export function Nav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Show Research / Blogs in the nav only once published via /admin.
+  useEffect(() => {
+    let cancelled = false;
+    async function check(kind: "research" | "blog", href: string, label: string) {
+      try {
+        const res = await fetch(`/api/content?kind=${kind}`);
+        if (!res.ok) return null;
+        const data = (await res.json()) as { items?: unknown[] };
+        if (Array.isArray(data.items) && data.items.length > 0) return { href, label };
+      } catch {
+        // ignore — link stays hidden
+      }
+      return null;
+    }
+    Promise.all([
+      check("research", "#research", "Research"),
+      check("blog", "#blogs", "Blogs"),
+    ]).then((found) => {
+      if (!cancelled)
+        setDynamicLinks(found.filter((l): l is { href: string; label: string } => !!l));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     const ids = links.map((l) => l.href.slice(1));
     const sections = ids
@@ -96,7 +125,9 @@ export function Nav() {
     );
     sections.forEach((s) => io.observe(s));
     return () => io.disconnect();
-  }, []);
+    // Re-observe when Research/Blogs links appear after publish.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dynamicLinks]);
 
   return (
     <header

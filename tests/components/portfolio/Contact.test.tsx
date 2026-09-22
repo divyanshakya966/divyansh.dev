@@ -36,7 +36,7 @@ afterEach(() => {
 describe("Contact", () => {
   it("renders the section and form fields", () => {
     renderContact();
-    expect(screen.getByText("07 / Contact")).toBeInTheDocument();
+    expect(screen.getByText("10 / Contact")).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toBeRequired();
     expect(screen.getByLabelText("Email")).toBeRequired();
     expect(screen.getByLabelText("Message")).toBeRequired();

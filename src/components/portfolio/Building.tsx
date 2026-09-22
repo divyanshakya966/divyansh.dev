@@ -5,7 +5,7 @@ export function Building() {
   return (
     <Section
       id="building"
-      eyebrow="06 / Status"
+      eyebrow="07 / Status"
       title={
         <>
           Currently <span className="text-gradient">building</span>.

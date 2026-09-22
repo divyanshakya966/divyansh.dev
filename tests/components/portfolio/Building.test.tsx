@@ -5,7 +5,7 @@ import { Building } from "@/components/portfolio/Building";
 describe("Building", () => {
   it("renders the section header", () => {
     render(<Building />);
-    expect(screen.getByText("06 / Status")).toBeInTheDocument();
+    expect(screen.getByText("07 / Status")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Currently");
   });
 

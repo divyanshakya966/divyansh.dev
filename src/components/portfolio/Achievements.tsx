@@ -12,7 +12,7 @@ export function Achievements() {
   return (
     <Section
       id="achievements"
-      eyebrow="05 / Achievements"
+      eyebrow="06 / Achievements"
       title={
         <>
           Highlights & <span className="text-gradient">recognitions</span>.
