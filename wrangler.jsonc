@@ -19,6 +19,8 @@
 	},
 	// External managed DB for admin auth + dynamic content (no connection
 	// strings — Workers talk to D1 over the `DB` binding).
+	// IMPORTANT: keep "binding" as "DB" — server.ts reads env.DB.
+	// `wrangler d1 create` auto-inserts "portfolio_db" here; rename it back.
 	// Setup: npx wrangler d1 create portfolio-db  -> paste database_id below
 	//        npx wrangler d1 migrations apply portfolio-db --local
 	//        npx wrangler d1 migrations apply portfolio-db --remote
