@@ -57,7 +57,7 @@ describe("Research", () => {
     );
     render(<Research />);
     expect(await screen.findByText("Test Paper")).toBeInTheDocument();
-    expect(screen.getByText("06 / Research")).toBeInTheDocument();
+    expect(screen.getByText("08 / Research")).toBeInTheDocument();
   });
 });
 

@@ -8,8 +8,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
+import { isSectionVisible } from "@/lib/settings";
+import type { ContentItem } from "@/lib/content";
 
 type Project = {
+  id: string;
   title: string;
   description: string;
   long: string;
@@ -19,62 +23,29 @@ type Project = {
   tag: string;
 };
 
-const projects: Project[] = [
-  {
-    title: "AegisStack",
-    tag: "DevSecOps",
-    description:
-      "A DevSecOps assistant that helps developers shift security left across the pipeline.",
-    long: "AegisStack is a DevSecOps assistant focused on baking security into every stage of the software delivery pipeline — dependency scanning, secret detection, container hardening checks, and policy-as-code guidance. Designed to give developers actionable, contextual security feedback without slowing them down.",
-    stack: ["Python", "Docker", "K8s", "DevSecOps"],
-    github: "https://github.com/divyanshakya966/AegisStack",
-  },
-  {
-    title: "SecureContent AI",
-    tag: "GenAI Security",
-    description:
-      "A GenAI security control plane that protects all inputs, outputs, and training data.",
-    long: "SecureContent AI treats every upload as untrusted data until verified: Ingest → Scan → Classify → Sanitize → Transform → Validate → Deliver. Detects PII, secrets, prompt injection and unsafe URLs, enforces 5 audience-aware policies plus custom OWASP / GDPR / HIPAA / PCI templates, and transforms sources into 15 artefact types (executive summaries, incident reports, policy briefs & more) with output DLP re-validation. Built with Next.js, Prisma, Gemini/Groq and Docker.",
-    stack: ["Next.js", "TypeScript", "Prisma", "Docker"],
-    github: "https://github.com/divyanshakya966/SecureContent-AI",
-  },
-  {
-    title: "SmartCampus",
-    tag: "Full Stack",
-    description: "A campus marketplace where students can buy, sell and exchange items safely.",
-    long: "SmartCampus is a closed-campus marketplace: verified student accounts, listings with images, chat, and a clean mobile-first UX. Built to solve a real problem on my own campus — secure, simple, and fast.",
-    stack: ["Node.js", "Express", "MongoDB", "React"],
-    github: "https://github.com/divyanshakya966/SmartCampus",
-  },
-  {
-    title: "Next-Gen Skillforge",
-    tag: "Full Stack",
-    description:
-      "An AI dashboard that analyzes resumes to generate personalized learning roadmaps.",
-    long: "Next-Gen Skillforge is an AI-powered career intelligence dashboard built with Next.js. It analyzes public profile links and resume content, extracts skill signals, generates role-fit insights, and creates a personalized learning roadmap.",
-    stack: ["Next.js", "React", "Tailwind CSS", "Recharts"],
-    github: "https://github.com/divyanshakya966/Next-Gen-Skillforge",
-  },
-  {
-    title: "Discord AI ChatBot",
-    tag: "Bots / AI",
-    description: "Multipurpose Discord bot with AI chat, moderation utilities and server commands.",
-    long: "A multipurpose Discord bot built with Node.js — AI-powered conversational responses, slash commands, moderation utilities, and quality-of-life server tools. Modular command architecture, easy to extend.",
-    stack: ["Node.js", "TypeScript", "discord.js", "OpenAI"],
-    github: "https://github.com/divyanshakya966/Discord-Bot",
-  },
-  {
-    title: "Telegram Mod Bot",
-    tag: "Bots",
-    description: "Group moderation bot for Telegram — anti-spam, warnings, and admin tooling.",
-    long: "A Telegram group moderation bot covering anti-spam filters, warning/ban systems, welcome flows, and admin utilities. Lightweight, configurable, and easy to self-host.",
-    stack: ["Python", "python-telegram-bot", "Docker"],
-    github: "https://github.com/divyanshakya966/Telegram-Bot",
-  },
-];
+function toProject(item: ContentItem): Project {
+  const meta = item.meta ?? {};
+  const long = typeof meta.long === "string" && meta.long.trim() ? meta.long : item.description;
+  const demo = typeof meta.demo === "string" && meta.demo.trim() ? meta.demo : undefined;
+  return {
+    id: String(item.id),
+    title: item.title,
+    description: item.description,
+    long,
+    stack: item.tags,
+    github: item.url || undefined,
+    demo,
+    tag: item.subtitle,
+  };
+}
 
 export function Projects() {
+  const { items } = usePublicContent("project");
+  const { settings } = useSiteSettings();
   const [open, setOpen] = useState<Project | null>(null);
+
+  if (!isSectionVisible(settings, "projects") || items.length === 0) return null;
+  const projects = items.map(toProject);
 
   return (
     <Section
@@ -90,7 +61,7 @@ export function Projects() {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
         {projects.map((p, i) => (
           <article
-            key={p.title}
+            key={p.id}
             role="button"
             tabIndex={0}
             aria-haspopup="dialog"

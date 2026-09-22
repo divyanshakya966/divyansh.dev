@@ -1,11 +1,13 @@
 import { Section } from "./Section";
 import { Award, BadgeCheck, ExternalLink, ShieldCheck } from "lucide-react";
-import { usePublicContent } from "@/hooks/use-content";
+import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
+import { isSectionVisible } from "@/lib/settings";
 
 export function Certifications() {
   const { items } = usePublicContent("certification");
+  const { settings } = useSiteSettings();
 
-  if (items.length === 0) return null;
+  if (!isSectionVisible(settings, "certifications") || items.length === 0) return null;
 
   return (
     <Section

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  SEEDS,
   SEED_CERTIFICATIONS,
   isContentKind,
+  parseMeta,
   rowToContentItem,
   sortContent,
   validateContentInput,
@@ -21,8 +23,43 @@ describe("content model", () => {
     expect(isContentKind("certification")).toBe(true);
     expect(isContentKind("research")).toBe(true);
     expect(isContentKind("blog")).toBe(true);
-    expect(isContentKind("project")).toBe(false);
+    expect(isContentKind("project")).toBe(true);
+    expect(isContentKind("experience")).toBe(true);
+    expect(isContentKind("achievement")).toBe(true);
+    expect(isContentKind("skill")).toBe(true);
+    expect(isContentKind("about")).toBe(true);
+    expect(isContentKind("building")).toBe(true);
+    expect(isContentKind("unknown")).toBe(false);
     expect(isContentKind(undefined)).toBe(false);
+  });
+
+  it("seeds every list section (research/blogs start empty and hidden)", () => {
+    expect(SEEDS.project).toHaveLength(6);
+    expect(SEEDS.experience).toHaveLength(5);
+    expect(SEEDS.achievement).toHaveLength(4);
+    expect(SEEDS.skill).toHaveLength(4);
+    expect(SEEDS.about).toHaveLength(4);
+    expect(SEEDS.building).toHaveLength(3);
+    expect(SEEDS.research).toEqual([]);
+    expect(SEEDS.blog).toEqual([]);
+  });
+
+  it("parses meta objects and JSON safely", () => {
+    expect(parseMeta({ long: "x" })).toEqual({ long: "x" });
+    expect(parseMeta('{"demo":"https://x"}')).toEqual({ demo: "https://x" });
+    expect(parseMeta("broken{")).toEqual({});
+    expect(parseMeta(undefined)).toEqual({});
+  });
+
+  it("accepts meta objects and rejects bad meta", () => {
+    const ok = validateContentInput({
+      kind: "project",
+      title: "T",
+      meta: { long: "L", demo: "https://x" },
+    });
+    expect(ok.ok).toBe(true);
+    expect(validateContentInput({ kind: "project", title: "T", meta: "nope{" }).ok).toBe(false);
+    expect(validateContentInput({ kind: "project", title: "T", meta: [1] }).ok).toBe(false);
   });
 
   it("accepts a valid input and cleans tags/urls", () => {

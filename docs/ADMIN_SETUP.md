@@ -41,21 +41,44 @@ prints the SQL + `.dev.vars` fallback values instead.
 
 ## 4. Sign in
 
-Open `/admin` → sign in. You get full control:
+Open `/admin` → sign in. You get full control of the portfolio:
 
-- **Tabs:** Certifications / Research / Blogs
-- **Add / Edit / Delete**, **Show / Hide**, **↑ ↓ reorder** (auto-saves `sort_order`)
-- **Change password** (other sessions are signed out)
+- **Tabs for every section:** Certifications, Projects, Experience, Achievements,
+  Skills, About cards, Status cards, Research, Blogs — plus **Site settings**.
+- **Add / Edit / Delete**, **Show / Hide**, **↑ ↓ reorder** (auto-saves
+  `sort_order`, the public site follows it).
+- **Import seeds** (one-click editable ownership), **Export/Import JSON**
+  (backup & restore per section).
+- **Site settings:** hero roles/tagline/location, about intro, contact email +
+  socials + status line, footer repo link, and per-section **on/off toggles**.
+- **Change password** (other sessions are signed out).
 
 ## How the public site behaves
 
-| Section                            | Visibility                                                                                                                                                                                                                                                              |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Certifications (`#certifications`) | Always visible. Seeded with your 2 real certs (TryHackMe SEC1 + LF LFS16) until D1 rows exist. After setup use **Import seed certifications** in `/admin` for editable ownership — hiding every D1 row hides the section (seeds never resurrect once you take control). |
-| Research (`#research`)             | **Hidden** until you publish ≥1 visible item from `/admin`.                                                                                                                                                                                                             |
-| Blogs (`#blogs`)                   | **Hidden** until you publish ≥1 visible item from `/admin`.                                                                                                                                                                                                             |
+| Section | Visibility |
+|---|---|
+| About / Skills / Projects / Experience / Certifications / Achievements / Building / Contact | Visible while the section holds ≥1 visible item **and** its toggle is on (`Site settings`). Seeded with the current site content until D1 rows exist; hiding everything (or toggling off) hides the section. |
+| Research (`#research`), Blogs (`#blogs`) | **Hidden** until you publish ≥1 visible item from `/admin` (toggle must also be on). |
 
-Nav links for Research/Blogs appear automatically once published.
+Nav links follow automatically: Research/Blogs appear once published; links for
+toggled-off sections disappear.
+
+## Field map (what each field does per kind)
+
+- **Common:** title*, subtitle, description, URL, image, tags (comma-separated),
+  sort order, visible flag.
+- **project:** subtitle = tag chip, URL = repo, tags = stack,
+  meta `{"long": "dialog text", "demo": "live URL (optional)"}`.
+- **experience:** subtitle = venue, description = body,
+  meta `{"when": "May 2026 – July 2026", "tag": "Open Source"}`.
+- **achievement:** subtitle = sub-line, meta `{"icon": "trophy|award|badge|star"}`.
+- **skill:** title = group name, tags = skills. No meta.
+- **about:** title + description = card, meta `{"icon": "shield|cloud|code|terminal"}`.
+- **building:** meta.card `build|learn|now`. `learn` uses meta `{"lines": [...]}`;
+  `now` uses meta `{"stats": [{"l": "…", "v": "…"}]}`.
+- **certification/research/blog:** URL = verify/paper/article link. No meta.
+
+Meta is a JSON object (max 4000 chars); the editor validates it before saving.
 
 ## Security model (strict by default)
 
@@ -72,7 +95,7 @@ Nav links for Research/Blogs appear automatically once published.
 
 If `DB` isn't bound yet, the server falls back to:
 
-- Content: seed certs + in-memory items (non-persistent, for UI testing).
+- Content: all seeds + in-memory CRUD (non-persistent, for UI testing).
 - Auth: single admin from environment (`ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` /
   `ADMIN_PASSWORD_SALT` from `npm run admin:create`). Provide them by exporting
   in your shell (always works, since the server falls back to `process.env`):
@@ -88,10 +111,18 @@ Set up D1 before deploying — the fallback is local-only.
 
 ## API reference
 
-- `GET /api/content?kind=certification|research|blog` — public, visible items only.
+- `GET /api/content?kind=…` — public, visible items only. Kinds: `certification`,
+  `research`, `blog`, `project`, `experience`, `achievement`, `skill`, `about`,
+  `building`.
+- `GET /api/settings` — public merged site settings (cached).
 - `GET /api/admin/status` — `{ db, hasAdmin }` (setup probe).
 - `POST /api/admin/login|logout`, `GET /api/admin/me`
 - `GET|POST /api/admin/items?kind=all|…`, `PUT|DELETE /api/admin/items/:id`
 - `POST /api/admin/reorder` `{ kind, ids }`, `PUT /api/admin/password`
-- `POST /api/admin/seed-import` `{ kind: "certification" }` — one-time import of
-  seed certs into D1 (409 once rows exist)
+- `POST /api/admin/seed-import` `{ kind }` — one-time import of that kind's
+  seeds into D1 (409 once rows exist; 400 for seedless kinds like research/blog)
+- `GET|PUT /api/admin/settings`, `DELETE /api/admin/settings/:key` (reset to default)
+
+> After pulling this update, run migrations again (new `0002` migration adds
+> the `meta` column + `site_settings` table):
+> `npm run db:migrate:local` and `npm run db:migrate:remote`.

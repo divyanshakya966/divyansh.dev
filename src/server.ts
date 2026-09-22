@@ -5,7 +5,7 @@ import { renderErrorPage } from "./lib/error-page";
 import { site } from "./lib/site";
 import {
   CONTENT_KINDS,
-  SEED_CERTIFICATIONS,
+  SEEDS,
   isContentKind,
   rowToContentItem,
   sortContent,
@@ -13,6 +13,12 @@ import {
   type ContentItem,
   type ContentKind,
 } from "./lib/content";
+import {
+  DEFAULT_SETTINGS,
+  isSettingKey,
+  mergeSettings,
+  validateSettingValue,
+} from "./lib/settings";
 import {
   SESSION_TTL_MS,
   buildClearedSessionCookie,
@@ -70,6 +76,7 @@ type WorkerEnv = {
 
 const CONTACT_API_PATH = "/api/contact";
 const CONTENT_API_PATH = "/api/content";
+const SETTINGS_API_PATH = "/api/settings";
 const ADMIN_API_PREFIX = "/api/admin/";
 const ROBOTS_PATH = "/robots.txt";
 const SITEMAP_PATH = "/sitemap.xml";
@@ -94,6 +101,7 @@ type FallbackSession = { username: string; userId: number; expiresAt: number };
 const fallbackSessions = new Map<string, FallbackSession>();
 type FallbackRow = Record<string, unknown>;
 const fallbackContent = new Map<number, FallbackRow>();
+const fallbackSettings: Record<string, string> = {};
 let fallbackContentSeq = 1000;
 let fallbackSeeded = false;
 
@@ -101,21 +109,25 @@ function seedFallbackContent() {
   if (fallbackSeeded) return;
   fallbackSeeded = true;
   const now = Date.now();
-  for (const seed of SEED_CERTIFICATIONS) {
-    fallbackContent.set(fallbackContentSeq++, {
-      id: fallbackContentSeq,
-      kind: seed.kind,
-      title: seed.title,
-      subtitle: seed.subtitle,
-      description: seed.description,
-      url: seed.url,
-      image: seed.image,
-      tags: JSON.stringify(seed.tags),
-      sort_order: seed.sort_order,
-      is_visible: 1,
-      created_at: now,
-      updated_at: now,
-    });
+  for (const kind of CONTENT_KINDS) {
+    for (const seed of SEEDS[kind]) {
+      const id = fallbackContentSeq++;
+      fallbackContent.set(id, {
+        id,
+        kind: seed.kind,
+        title: seed.title,
+        subtitle: seed.subtitle,
+        description: seed.description,
+        url: seed.url,
+        image: seed.image,
+        tags: JSON.stringify(seed.tags),
+        meta: JSON.stringify(seed.meta ?? {}),
+        sort_order: seed.sort_order,
+        is_visible: 1,
+        created_at: now,
+        updated_at: now,
+      });
+    }
   }
 }
 
@@ -371,6 +383,9 @@ function publicCacheHeaders(): HeadersInit {
   return { "cache-control": "public, max-age=60, s-maxage=300" };
 }
 
+const CONTENT_COLUMNS =
+  "id, kind, title, subtitle, description, url, image, tags, meta, sort_order, is_visible, created_at, updated_at";
+
 async function queryVisibleContent(
   db: D1Database | null,
   kind: ContentKind,
@@ -379,48 +394,30 @@ async function queryVisibleContent(
     try {
       const res = await db
         .prepare(
-          "SELECT id, kind, title, subtitle, description, url, image, tags, sort_order, is_visible, created_at, updated_at FROM content_items WHERE kind = ? AND is_visible = 1 ORDER BY sort_order ASC, id ASC",
+          `SELECT ${CONTENT_COLUMNS} FROM content_items WHERE kind = ? AND is_visible = 1 ORDER BY sort_order ASC, id ASC`,
         )
         .bind(kind)
         .all<Record<string, unknown>>();
       const items = sortContent(res.results.map(rowToContentItem));
       if (items.length > 0) return items;
       // No visible rows: distinguish "admin hid everything" (respect it)
-      // from "admin never added this kind" (serve seeds for certifications).
+      // from "admin never added this kind" (serve seeds for seeded kinds).
       const count = await db
         .prepare("SELECT COUNT(*) as count FROM content_items WHERE kind = ?")
         .bind(kind)
         .first<{ count: number }>();
       if ((count?.count ?? 0) > 0) return [];
-      if (kind === "certification") {
-        return SEED_CERTIFICATIONS.filter((s) => s.is_visible);
-      }
-      return [];
+      return SEEDS[kind].filter((s) => s.is_visible);
     } catch (error) {
       console.error("D1 content query failed, falling back to seed", error);
     }
   }
-  if (kind === "certification") {
-    seedFallbackContent();
-    const seeded = SEED_CERTIFICATIONS.filter((s) => s.is_visible);
-    const extra = [...fallbackContent.values()]
-      .filter((r) => r.kind === kind && Number(r.is_visible) === 1 && Number(r.id) >= 1000)
-      .map(rowToContentItem);
-    // In fallback mode without user rows, serve seeds. If admin added rows
-    // in-memory, merge (dedupe by id).
-    const seen = new Set(extra.map((e) => e.title));
-    return sortContent([...extra, ...seeded.filter((s) => !seen.has(s.title))]);
-  }
-  if (!db) {
-    seedFallbackContent();
-    return sortContent(
-      [...fallbackContent.values()]
-        .filter((r) => r.kind === kind && Number(r.is_visible) === 1)
-        .map(rowToContentItem)
-        .filter((i) => !String(i.id).startsWith("seed")),
-    );
-  }
-  return [];
+  seedFallbackContent();
+  return sortContent(
+    [...fallbackContent.values()]
+      .filter((r) => r.kind === kind && Number(r.is_visible) === 1)
+      .map(rowToContentItem),
+  );
 }
 
 async function queryAllContent(
@@ -433,12 +430,12 @@ async function queryAllContent(
         kind === "all"
           ? await db
               .prepare(
-                "SELECT id, kind, title, subtitle, description, url, image, tags, sort_order, is_visible, created_at, updated_at FROM content_items ORDER BY kind ASC, sort_order ASC, id ASC",
+                `SELECT ${CONTENT_COLUMNS} FROM content_items ORDER BY kind ASC, sort_order ASC, id ASC`,
               )
               .all<Record<string, unknown>>()
           : await db
               .prepare(
-                "SELECT id, kind, title, subtitle, description, url, image, tags, sort_order, is_visible, created_at, updated_at FROM content_items WHERE kind = ? ORDER BY sort_order ASC, id ASC",
+                `SELECT ${CONTENT_COLUMNS} FROM content_items WHERE kind = ? ORDER BY sort_order ASC, id ASC`,
               )
               .bind(kind)
               .all<Record<string, unknown>>();
@@ -450,14 +447,8 @@ async function queryAllContent(
   }
   seedFallbackContent();
   const rows = [...fallbackContent.values()].map(rowToContentItem);
-  const withSeeds: ContentItem[] =
-    kind === "all" || kind === "certification"
-      ? [
-          ...SEED_CERTIFICATIONS.filter((s) => kind === "all" || s.kind === kind),
-          ...rows.filter((r) => !String(r.id).startsWith("seed")),
-        ]
-      : rows;
-  return (kind === "all" ? withSeeds : withSeeds.filter((i) => i.kind === kind)).sort((a, b) =>
+  const filtered = kind === "all" ? rows : rows.filter((i) => i.kind === kind);
+  return filtered.sort((a, b) =>
     kind === "all"
       ? a.kind.localeCompare(b.kind) || a.sort_order - b.sort_order
       : a.sort_order - b.sort_order,
@@ -698,7 +689,7 @@ async function handleAdminItems(request: Request, env: unknown, url: URL): Promi
       try {
         const result = await db
           .prepare(
-            "INSERT INTO content_items (kind, title, subtitle, description, url, image, tags, sort_order, is_visible, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO content_items (kind, title, subtitle, description, url, image, tags, meta, sort_order, is_visible, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           )
           .bind(
             v.kind,
@@ -708,6 +699,7 @@ async function handleAdminItems(request: Request, env: unknown, url: URL): Promi
             v.url ?? "",
             v.image ?? "",
             JSON.stringify(v.tags ?? []),
+            JSON.stringify(v.meta ?? {}),
             v.sort_order ?? 0,
             v.is_visible === false ? 0 : 1,
             now,
@@ -731,6 +723,7 @@ async function handleAdminItems(request: Request, env: unknown, url: URL): Promi
       url: v.url ?? "",
       image: v.image ?? "",
       tags: JSON.stringify(v.tags ?? []),
+      meta: JSON.stringify(v.meta ?? {}),
       sort_order: v.sort_order ?? 0,
       is_visible: v.is_visible === false ? 0 : 1,
       created_at: now,
@@ -768,7 +761,7 @@ async function handleAdminItemById(
       try {
         await db
           .prepare(
-            "UPDATE content_items SET kind = ?, title = ?, subtitle = ?, description = ?, url = ?, image = ?, tags = ?, sort_order = ?, is_visible = ?, updated_at = ? WHERE id = ?",
+            "UPDATE content_items SET kind = ?, title = ?, subtitle = ?, description = ?, url = ?, image = ?, tags = ?, meta = ?, sort_order = ?, is_visible = ?, updated_at = ? WHERE id = ?",
           )
           .bind(
             v.kind,
@@ -778,6 +771,7 @@ async function handleAdminItemById(
             v.url ?? "",
             v.image ?? "",
             JSON.stringify(v.tags ?? []),
+            JSON.stringify(v.meta ?? {}),
             v.sort_order ?? 0,
             v.is_visible === false ? 0 : 1,
             now,
@@ -801,6 +795,7 @@ async function handleAdminItemById(
       url: v.url ?? "",
       image: v.image ?? "",
       tags: JSON.stringify(v.tags ?? []),
+      meta: JSON.stringify(v.meta ?? {}),
       sort_order: v.sort_order ?? 0,
       is_visible: v.is_visible === false ? 0 : 1,
       updated_at: now,
@@ -888,26 +883,30 @@ async function handleAdminSeedImport(request: Request, env: unknown): Promise<Re
     return jsonResponse({ error: "Seed import needs D1. Nothing was changed." }, 501);
   }
   const body = ((await readJson(request)) ?? {}) as Record<string, unknown>;
-  // Only certifications have seeds today; validated explicitly.
-  if (body.kind !== undefined && body.kind !== "certification") {
-    return jsonResponse({ error: "Only certification seeds can be imported." }, 400);
+  const kind = body.kind ?? "certification";
+  if (!isContentKind(kind)) {
+    return jsonResponse({ error: "Invalid kind." }, 400);
+  }
+  const seeds = SEEDS[kind];
+  if (seeds.length === 0) {
+    return jsonResponse({ error: `No seeds exist for ${kind}. Add items manually instead.` }, 400);
   }
   try {
     const count = await db
       .prepare("SELECT COUNT(*) as count FROM content_items WHERE kind = ?")
-      .bind("certification")
+      .bind(kind)
       .first<{ count: number }>();
     if ((count?.count ?? 0) > 0) {
       return jsonResponse(
-        { error: "Certifications already exist in D1. Import runs only once on an empty table." },
+        { error: "Items already exist in D1. Import runs only once on an empty table." },
         409,
       );
     }
     const now = Date.now();
-    for (const seed of SEED_CERTIFICATIONS) {
+    for (const seed of seeds) {
       await db
         .prepare(
-          "INSERT INTO content_items (kind, title, subtitle, description, url, image, tags, sort_order, is_visible, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO content_items (kind, title, subtitle, description, url, image, tags, meta, sort_order, is_visible, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(
           seed.kind,
@@ -917,6 +916,7 @@ async function handleAdminSeedImport(request: Request, env: unknown): Promise<Re
           seed.url,
           seed.image,
           JSON.stringify(seed.tags),
+          JSON.stringify(seed.meta ?? {}),
           seed.sort_order,
           1,
           now,
@@ -924,11 +924,98 @@ async function handleAdminSeedImport(request: Request, env: unknown): Promise<Re
         )
         .run();
     }
-    return jsonResponse({ ok: true, imported: SEED_CERTIFICATIONS.length }, 201);
+    return jsonResponse({ ok: true, imported: seeds.length }, 201);
   } catch (error) {
     console.error("Seed import failed", error);
     return jsonResponse({ error: "Failed to import seeds." }, 500);
   }
+}
+
+async function readSettings(db: D1Database | null): Promise<Record<string, string>> {
+  const overrides: Record<string, string> = {};
+  if (db) {
+    try {
+      const res = await db
+        .prepare("SELECT key, value FROM site_settings")
+        .all<{ key: string; value: string }>();
+      for (const row of res.results) {
+        if (typeof row.key === "string" && typeof row.value === "string") {
+          overrides[row.key] = row.value;
+        }
+      }
+    } catch (error) {
+      console.error("Settings read failed, using defaults", error);
+    }
+  } else {
+    Object.assign(overrides, fallbackSettings);
+  }
+  return mergeSettings(overrides);
+}
+
+async function handleSettingsRequest(request: Request, env: unknown): Promise<Response> {
+  if (request.method !== "GET") {
+    return new Response("Method not allowed", { status: 405, headers: { allow: "GET" } });
+  }
+  const settings = await readSettings(getDb(env));
+  return jsonResponse({ settings }, 200, publicCacheHeaders());
+}
+
+async function handleAdminSettings(request: Request, env: unknown): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (user instanceof Response) return user;
+
+  if (request.method === "GET") {
+    return jsonResponse({ settings: await readSettings(getDb(env)) });
+  }
+
+  if (request.method === "PUT" || request.method === "POST") {
+    const body = ((await readJson(request)) ?? {}) as Record<string, unknown>;
+    const key = typeof body.key === "string" ? body.key : "";
+    const validated = validateSettingValue(key, body.value);
+    if (!validated.ok) return jsonResponse({ error: validated.error }, 400);
+    const db = getDb(env);
+    const now = Date.now();
+    if (db) {
+      try {
+        await db
+          .prepare(
+            "INSERT INTO site_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+          )
+          .bind(key, validated.value, now)
+          .run();
+        return jsonResponse({ ok: true });
+      } catch (error) {
+        console.error("Settings save failed", error);
+        return jsonResponse({ error: "Failed to save setting." }, 500);
+      }
+    }
+    fallbackSettings[key] = validated.value;
+    return jsonResponse({ ok: true });
+  }
+
+  return new Response("Method not allowed", { status: 405, headers: { allow: "GET, PUT" } });
+}
+
+async function handleAdminSettingDelete(
+  request: Request,
+  env: unknown,
+  key: string,
+): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (user instanceof Response) return user;
+  if (!isSettingKey(key)) return jsonResponse({ error: "Unknown setting key." }, 400);
+  const db = getDb(env);
+  if (db) {
+    try {
+      await db.prepare("DELETE FROM site_settings WHERE key = ?").bind(key).run();
+      return jsonResponse({ ok: true });
+    } catch (error) {
+      console.error("Settings reset failed", error);
+      return jsonResponse({ error: "Failed to reset setting." }, 500);
+    }
+  }
+  delete fallbackSettings[key];
+  return jsonResponse({ ok: true });
 }
 
 async function handleAdminPassword(request: Request, env: unknown): Promise<Response> {
@@ -1001,12 +1088,19 @@ async function handleAdminRequest(request: Request, env: unknown): Promise<Respo
   if (path === "/api/admin/seed-import" && request.method === "POST") {
     return handleAdminSeedImport(request, env);
   }
+  if (path === "/api/admin/settings" && ["GET", "PUT", "POST"].includes(request.method)) {
+    return handleAdminSettings(request, env);
+  }
   if (path === "/api/admin/password" && (request.method === "PUT" || request.method === "POST")) {
     return handleAdminPassword(request, env);
   }
   const itemMatch = path.match(/^\/api\/admin\/items\/([^/]+)$/);
   if (itemMatch && (request.method === "PUT" || request.method === "DELETE")) {
     return handleAdminItemById(request, env, decodeURIComponent(itemMatch[1]!));
+  }
+  const settingMatch = path.match(/^\/api\/admin\/settings\/([^/]+)$/);
+  if (settingMatch && request.method === "DELETE") {
+    return handleAdminSettingDelete(request, env, decodeURIComponent(settingMatch[1]!));
   }
   return jsonResponse({ error: "Not found." }, 404);
 }
@@ -1082,6 +1176,9 @@ export default {
       }
       if (url.pathname === CONTENT_API_PATH) {
         return await handleContentRequest(request, env);
+      }
+      if (url.pathname === SETTINGS_API_PATH) {
+        return await handleSettingsRequest(request, env);
       }
       if (
         url.pathname === ADMIN_API_PREFIX.slice(0, -1) ||

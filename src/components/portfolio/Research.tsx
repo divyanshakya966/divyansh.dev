@@ -1,6 +1,7 @@
 import { Section } from "./Section";
 import { FileText, ExternalLink } from "lucide-react";
-import { usePublicContent } from "@/hooks/use-content";
+import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
+import { isSectionVisible } from "@/lib/settings";
 
 /**
  * Hidden until you publish at least one visible research item from /admin.
@@ -8,14 +9,16 @@ import { usePublicContent } from "@/hooks/use-content";
  */
 export function Research() {
   const { items, loading } = usePublicContent("research");
+  const { settings } = useSiteSettings();
 
+  if (!isSectionVisible(settings, "research")) return null;
   if (loading && items.length === 0) return null;
   if (items.length === 0) return null;
 
   return (
     <Section
       id="research"
-      eyebrow="06 / Research"
+      eyebrow="08 / Research"
       title={
         <>
           Research & <span className="text-gradient">papers</span>.

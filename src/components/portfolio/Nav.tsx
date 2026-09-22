@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 
 const baseLinks = [
-  { href: "#about", label: "About" },
-  { href: "#skills", label: "Skills" },
-  { href: "#projects", label: "Projects" },
-  { href: "#experience", label: "Experience" },
-  { href: "#certifications", label: "Certifications" },
-  { href: "#achievements", label: "Achievements" },
-  { href: "#building", label: "Building" },
-  { href: "#contact", label: "Contact" },
+  { href: "#about", label: "About", section: "about" },
+  { href: "#skills", label: "Skills", section: "skills" },
+  { href: "#projects", label: "Projects", section: "projects" },
+  { href: "#experience", label: "Experience", section: "experience" },
+  { href: "#certifications", label: "Certifications", section: "certifications" },
+  { href: "#achievements", label: "Achievements", section: "achievements" },
+  { href: "#building", label: "Building", section: "building" },
+  { href: "#contact", label: "Contact", section: "contact" },
 ];
 
 const TERMS = ["techie", "builder", "hacker", "tinkerer"];
@@ -55,9 +55,11 @@ export function Nav() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [dynamicLinks, setDynamicLinks] = useState<{ href: string; label: string }[]>([]);
+  const [hiddenSections, setHiddenSections] = useState<Set<string>>(new Set());
   const typed = useTypewriter();
   const menuBtnRef = useRef<HTMLButtonElement>(null);
-  const links = [...baseLinks.slice(0, 7), ...dynamicLinks, baseLinks[baseLinks.length - 1]!];
+  const visibleBase = baseLinks.filter((l) => !hiddenSections.has(l.section));
+  const links = [...visibleBase.slice(0, 7), ...dynamicLinks, ...visibleBase.slice(7)];
 
   useEffect(() => {
     if (!open) return;
@@ -80,7 +82,8 @@ export function Nav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Show Research / Blogs in the nav only once published via /admin.
+  // Show Research / Blogs in the nav only once published via /admin,
+  // and hide links for sections the admin turned off.
   useEffect(() => {
     let cancelled = false;
     async function check(kind: "research" | "blog", href: string, label: string) {
@@ -101,6 +104,20 @@ export function Nav() {
       if (!cancelled)
         setDynamicLinks(found.filter((l): l is { href: string; label: string } => !!l));
     });
+    fetch("/api/settings", { credentials: "same-origin" })
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { settings?: Record<string, string> };
+        const s = data.settings ?? {};
+        const hidden = new Set<string>();
+        for (const l of baseLinks) {
+          if (s[`section_${l.section}_visible`] === "0") hidden.add(l.section);
+        }
+        if (!cancelled) setHiddenSections(hidden);
+      })
+      .catch(() => {
+        // ignore — all links stay visible
+      });
     return () => {
       cancelled = true;
     };
@@ -125,9 +142,10 @@ export function Nav() {
     );
     sections.forEach((s) => io.observe(s));
     return () => io.disconnect();
-    // Re-observe when Research/Blogs links appear after publish.
+    // Re-observe when Research/Blogs links appear after publish or when
+    // visibility flags change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dynamicLinks]);
+  }, [dynamicLinks, hiddenSections]);
 
   return (
     <header

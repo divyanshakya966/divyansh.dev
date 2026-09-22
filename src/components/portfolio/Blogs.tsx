@@ -1,20 +1,23 @@
 import { Section } from "./Section";
 import { PenLine, ExternalLink } from "lucide-react";
-import { usePublicContent } from "@/hooks/use-content";
+import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
+import { isSectionVisible } from "@/lib/settings";
 
 /**
  * Hidden until you publish at least one visible blog post from /admin.
  */
 export function Blogs() {
   const { items, loading } = usePublicContent("blog");
+  const { settings } = useSiteSettings();
 
+  if (!isSectionVisible(settings, "blogs")) return null;
   if (loading && items.length === 0) return null;
   if (items.length === 0) return null;
 
   return (
     <Section
       id="blogs"
-      eyebrow="07 / Writing"
+      eyebrow="09 / Writing"
       title={
         <>
           Notes & <span className="text-gradient">blogs</span>.

@@ -1,4 +1,8 @@
+import { useSiteSettings } from "@/hooks/use-content";
+
 export function Footer() {
+  const { settings } = useSiteSettings();
+  const repo = settings.footer_repo?.trim() || "https://github.com/divyanshakya966/divyansh.dev";
   return (
     <footer className="border-t border-border mt-10">
       <div
@@ -9,7 +13,7 @@ export function Footer() {
         <div className="font-mono">
           Crafting open-source software. Feel free to star the repo on{" "}
           <a
-            href="https://github.com/divyanshakya966/divyansh.dev"
+            href={repo}
             target="_blank"
             rel="noopener noreferrer"
             className="text-gradient hover:underline"

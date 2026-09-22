@@ -74,7 +74,8 @@ describe("Contact", () => {
         }),
       );
     });
-    const [, init] = fetchMock.mock.calls[0];
+    const [, init] = fetchMock.mock.calls.find(([url]) => url === "/api/contact")!;
+    expect(init).toBeDefined();
     expect(JSON.parse(init!.body as string)).toEqual({
       name: "Test User",
       email: "test@example.com",

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ContentItem, ContentKind } from "@/lib/content";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SEEDS, metaString, type ContentItem, type ContentKind } from "@/lib/content";
+import { SETTING_DEFS } from "@/lib/settings";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -10,13 +11,31 @@ export const Route = createFileRoute("/admin")({
 });
 
 type Status = { db: boolean; hasAdmin: boolean };
-type Tab = ContentKind;
+type Tab = ContentKind | "settings";
 
 const TABS: { kind: Tab; label: string; hint: string }[] = [
   {
     kind: "certification",
     label: "Certifications",
-    hint: "Always visible — seeded with your 2 real certs.",
+    hint: "Always visible while ≥1 item is visible.",
+  },
+  { kind: "project", label: "Projects", hint: "Selected work cards + detail dialog." },
+  { kind: "experience", label: "Experience", hint: "Timeline entries. meta: { when, tag }." },
+  {
+    kind: "achievement",
+    label: "Achievements",
+    hint: "Highlight cards. meta: { icon: trophy|award|badge|star }.",
+  },
+  { kind: "skill", label: "Skills", hint: "Groups. Title = group name, tags = skills." },
+  {
+    kind: "about",
+    label: "About cards",
+    hint: "Focus cards. meta: { icon: shield|cloud|code|terminal }.",
+  },
+  {
+    kind: "building",
+    label: "Status cards",
+    hint: "meta.card is build|learn|now. learn uses meta.lines[], now uses meta.stats[{l,v}].",
   },
   {
     kind: "research",
@@ -24,7 +43,26 @@ const TABS: { kind: Tab; label: string; hint: string }[] = [
     hint: "Hidden on the site until you publish 1 visible item.",
   },
   { kind: "blog", label: "Blogs", hint: "Hidden on the site until you publish 1 visible item." },
+  {
+    kind: "settings",
+    label: "Site settings",
+    hint: "Hero text, contact details, footer link, section on/off.",
+  },
 ];
+
+const KIND_META_HELP: Record<ContentKind, string> = {
+  certification: "No meta needed. Tags = skill chips.",
+  research: "No meta needed. URL = paper/read link.",
+  blog: "No meta needed. URL = article link (optional).",
+  project:
+    'meta: { "long": "dialog text", "demo": "https://live-url (optional)" }. URL = repo. Subtitle = tag. Tags = stack.',
+  experience:
+    'meta: { "when": "May 2026 – July 2026", "tag": "Open Source" }. Subtitle = venue. Tags = filter chips.',
+  achievement: 'meta: { "icon": "trophy|award|badge|star" }. Subtitle = sub-line.',
+  skill: "No meta needed. Title = group name, tags = skills.",
+  about: 'meta: { "icon": "shield|cloud|code|terminal" }. Description = card body.',
+  building: 'meta.card build|learn|now. learn: { "lines": [...] }. now: { "stats": [{"l","v"}] }.',
+};
 
 const EMPTY_FORM = {
   title: "",
@@ -33,6 +71,7 @@ const EMPTY_FORM = {
   url: "",
   image: "",
   tags: "",
+  meta: "",
   sort_order: "0",
   is_visible: true,
 };
@@ -62,6 +101,18 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+function downloadJson(filename: string, value: unknown) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function AdminPage() {
   const [status, setStatus] = useState<Status | null>(null);
   const [user, setUser] = useState<string | null>(null);
@@ -88,6 +139,14 @@ function AdminPage() {
   const [newPassword, setNewPassword] = useState("");
   const [changingPw, setChangingPw] = useState(false);
   const [importingSeeds, setImportingSeeds] = useState(false);
+  const [importingFile, setImportingFile] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Site settings
+  const [serverSettings, setServerSettings] = useState<Record<string, string>>({});
+  const [settingsDraft, setSettingsDraft] = useState<Record<string, string>>({});
+  const [loadingSettings, setLoadingSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -122,18 +181,40 @@ function AdminPage() {
     }
   }, []);
 
+  const refreshSettings = useCallback(async () => {
+    setLoadingSettings(true);
+    try {
+      const data = await api<{ settings: Record<string, string> }>("/api/admin/settings");
+      const s = data.settings ?? {};
+      setServerSettings(s);
+      setSettingsDraft(s);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load settings.");
+    } finally {
+      setLoadingSettings(false);
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       await refreshStatus();
       const ok = await refreshMe();
-      if (ok) await refreshItems();
+      if (ok) {
+        await refreshItems();
+        await refreshSettings();
+      }
       setChecking(false);
     })();
-  }, [refreshMe, refreshItems, refreshStatus]);
+  }, [refreshMe, refreshItems, refreshSettings, refreshStatus]);
 
+  const isKindTab = tab !== "settings";
+  const activeKind = isKindTab ? (tab as ContentKind) : null;
   const visibleItems = useMemo(
-    () => items.filter((i) => i.kind === tab).sort((a, b) => a.sort_order - b.sort_order),
-    [items, tab],
+    () =>
+      activeKind
+        ? items.filter((i) => i.kind === activeKind).sort((a, b) => a.sort_order - b.sort_order)
+        : [],
+    [items, activeKind],
   );
 
   async function handleLogin(e: React.FormEvent) {
@@ -149,6 +230,7 @@ function AdminPage() {
       setUser(data.user.username);
       setPassword("");
       await refreshItems();
+      await refreshSettings();
       setNotice(`Welcome back, ${data.user.username}.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Login failed.");
@@ -168,6 +250,7 @@ function AdminPage() {
   }
 
   function openAdd() {
+    if (!activeKind) return;
     setEditingId(null);
     setForm({ ...EMPTY_FORM, sort_order: String(visibleItems.length + 1) });
     setFormOpen(true);
@@ -175,10 +258,8 @@ function AdminPage() {
   }
 
   function openEdit(item: ContentItem) {
-    if (typeof item.id === "string" && item.id.startsWith("seed")) {
-      setError(
-        "Seed certifications are read-only — use Add to create your own copy, then hide via admin if needed.",
-      );
+    if (typeof item.id === "string" && String(item.id).startsWith("seed")) {
+      setError("Seed items are read-only — import them to D1 first to edit.");
       return;
     }
     setEditingId(item.id);
@@ -189,6 +270,7 @@ function AdminPage() {
       url: item.url,
       image: item.image,
       tags: item.tags.join(", "),
+      meta: metaString(item.meta),
       sort_order: String(item.sort_order),
       is_visible: item.is_visible,
     });
@@ -196,30 +278,34 @@ function AdminPage() {
     setError("");
   }
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    setNotice("");
-    const payload = {
-      kind: tab,
+  function itemPayload() {
+    return {
+      kind: activeKind,
       title: form.title.trim(),
       subtitle: form.subtitle.trim(),
       description: form.description.trim(),
       url: form.url.trim(),
       image: form.image.trim(),
       tags: form.tags,
+      meta: form.meta.trim(),
       sort_order: Number(form.sort_order) || 0,
       is_visible: form.is_visible,
     };
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    setNotice("");
     try {
       if (editingId === null) {
-        await api("/api/admin/items", { method: "POST", body: JSON.stringify(payload) });
+        await api("/api/admin/items", { method: "POST", body: JSON.stringify(itemPayload()) });
         setNotice("Item added.");
       } else {
         await api(`/api/admin/items/${editingId}`, {
           method: "PUT",
-          body: JSON.stringify(payload),
+          body: JSON.stringify(itemPayload()),
         });
         setNotice("Item updated.");
       }
@@ -233,8 +319,8 @@ function AdminPage() {
   }
 
   async function handleDelete(item: ContentItem) {
-    if (typeof item.id === "string" && item.id.startsWith("seed")) {
-      setError("Seed items can't be deleted. Add D1 rows to override them.");
+    if (typeof item.id === "string" && String(item.id).startsWith("seed")) {
+      setError("Seed items can't be deleted. Import them to D1 first.");
       return;
     }
     if (!window.confirm(`Delete "${item.title}"?`)) return;
@@ -249,8 +335,8 @@ function AdminPage() {
   }
 
   async function handleToggle(item: ContentItem) {
-    if (typeof item.id === "string" && item.id.startsWith("seed")) {
-      setError("Seed items are read-only. Add your own copy to control visibility.");
+    if (typeof item.id === "string" && String(item.id).startsWith("seed")) {
+      setError("Seed items are read-only. Import them to D1 first.");
       return;
     }
     try {
@@ -264,6 +350,7 @@ function AdminPage() {
           url: item.url,
           image: item.image,
           tags: item.tags,
+          meta: item.meta ?? {},
           sort_order: item.sort_order,
           is_visible: !item.is_visible,
         }),
@@ -275,6 +362,7 @@ function AdminPage() {
   }
 
   async function handleMove(item: ContentItem, dir: -1 | 1) {
+    if (!activeKind) return;
     const ordered = [...visibleItems].sort((a, b) => a.sort_order - b.sort_order);
     const idx = ordered.findIndex((i) => String(i.id) === String(item.id));
     const swapIdx = idx + dir;
@@ -283,20 +371,18 @@ function AdminPage() {
     const tmp = next[idx]!;
     next[idx] = next[swapIdx]!;
     next[swapIdx] = tmp;
-    // Optimistic reorder
     setItems((prev) =>
       prev.map((p) => {
         const pos = next.findIndex((n) => String(n.id) === String(p.id));
-        return pos >= 0 && p.kind === tab ? { ...p, sort_order: pos + 1 } : p;
+        return pos >= 0 && p.kind === activeKind ? { ...p, sort_order: pos + 1 } : p;
       }),
     );
     try {
       const numericIds = next.filter((n) => typeof n.id === "number").map((n) => n.id as number);
-      // Seeds have string ids — persist what we can, then refresh.
       if (numericIds.length === next.length) {
         await api("/api/admin/reorder", {
           method: "POST",
-          body: JSON.stringify({ kind: tab, ids: numericIds }),
+          body: JSON.stringify({ kind: activeKind, ids: numericIds }),
         });
       } else {
         for (let i = 0; i < next.length; i++) {
@@ -312,6 +398,7 @@ function AdminPage() {
                 url: n.url,
                 image: n.image,
                 tags: n.tags,
+                meta: n.meta ?? {},
                 sort_order: i + 1,
                 is_visible: n.is_visible,
               }),
@@ -347,15 +434,16 @@ function AdminPage() {
   }
 
   async function handleSeedImport() {
+    if (!activeKind) return;
     setImportingSeeds(true);
     setError("");
     setNotice("");
     try {
       const data = await api<{ imported: number }>("/api/admin/seed-import", {
         method: "POST",
-        body: JSON.stringify({ kind: "certification" }),
+        body: JSON.stringify({ kind: activeKind }),
       });
-      setNotice(`Imported ${data.imported} seed certifications into D1 — now fully editable.`);
+      setNotice(`Imported ${data.imported} seed(s) into D1 — now fully editable.`);
       await refreshItems();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Seed import failed.");
@@ -364,9 +452,81 @@ function AdminPage() {
     }
   }
 
-  const showSeedImport = Boolean(
-    status?.db && tab === "certification" && !visibleItems.some((i) => typeof i.id === "number"),
-  );
+  function handleExport() {
+    if (!activeKind) return;
+    downloadJson(`${activeKind}-export.json`, visibleItems);
+    setNotice(`Exported ${visibleItems.length} ${activeKind} item(s).`);
+  }
+
+  async function handleImportFile(file: File) {
+    if (!activeKind) return;
+    setImportingFile(true);
+    setError("");
+    setNotice("");
+    try {
+      const text = await file.text();
+      const parsed: unknown = JSON.parse(text);
+      const arr = Array.isArray(parsed)
+        ? parsed
+        : parsed &&
+            typeof parsed === "object" &&
+            Array.isArray((parsed as { items?: unknown }).items)
+          ? (parsed as { items: unknown[] }).items
+          : null;
+      if (!arr) throw new Error("File must contain a JSON array (or { items: [...] }).");
+      let added = 0;
+      for (const raw of arr) {
+        if (!raw || typeof raw !== "object") continue;
+        const body = { ...(raw as Record<string, unknown>), kind: activeKind };
+        await api("/api/admin/items", { method: "POST", body: JSON.stringify(body) });
+        added++;
+      }
+      setNotice(`Imported ${added} item(s) into ${activeKind}.`);
+      await refreshItems();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Import failed.");
+    } finally {
+      setImportingFile(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function handleSaveSettings(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingSettings(true);
+    setError("");
+    setNotice("");
+    try {
+      let saved = 0;
+      for (const def of SETTING_DEFS) {
+        const draft = settingsDraft[def.key] ?? "";
+        if (draft !== (serverSettings[def.key] ?? "")) {
+          await api("/api/admin/settings", {
+            method: "PUT",
+            body: JSON.stringify({ key: def.key, value: draft }),
+          });
+          saved++;
+        }
+      }
+      setNotice(saved === 0 ? "No changes to save." : `Saved ${saved} setting(s).`);
+      await refreshSettings();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed.");
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
+  async function handleResetSetting(key: string) {
+    setError("");
+    try {
+      await api(`/api/admin/settings/${encodeURIComponent(key)}`, { method: "DELETE" });
+      await refreshSettings();
+      setNotice("Setting reset to default.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reset failed.");
+    }
+  }
 
   if (checking) {
     return (
@@ -471,6 +631,13 @@ function AdminPage() {
   }
 
   const activeTab = TABS.find((t) => t.kind === tab)!;
+  const showSeedImport = Boolean(
+    isKindTab &&
+    activeKind &&
+    status?.db &&
+    SEEDS[activeKind].length > 0 &&
+    !visibleItems.some((i) => typeof i.id === "number"),
+  );
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6">
@@ -544,264 +711,413 @@ function AdminPage() {
         </div>
         <p className="mt-2 text-xs font-mono text-muted-foreground">{activeTab.hint}</p>
 
-        <div className="mt-4 glass rounded-2xl p-4 sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-semibold">
-              {activeTab.label}{" "}
-              <span className="ml-1 font-mono text-xs text-muted-foreground">
-                {visibleItems.length} item{visibleItems.length === 1 ? "" : "s"}
-              </span>
-            </h2>
-            <div className="flex gap-2">
+        {tab === "settings" ? (
+          <div className="mt-4 glass rounded-2xl p-4 sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-semibold">Site settings</h2>
               <button
-                onClick={refreshItems}
-                disabled={loadingItems}
+                onClick={refreshSettings}
+                disabled={loadingSettings}
                 className="rounded-lg px-3 py-1.5 text-xs border border-border hover:bg-muted disabled:opacity-60"
               >
-                {loadingItems ? "Refreshing…" : "Refresh"}
-              </button>
-              <button
-                onClick={openAdd}
-                className="rounded-lg px-3 py-1.5 text-xs font-medium text-primary-foreground bg-gradient-to-r from-cyan to-violet"
-              >
-                + Add
+                {loadingSettings ? "Refreshing…" : "Refresh"}
               </button>
             </div>
+            {loadingSettings ? (
+              <p className="mt-4 font-mono text-xs text-muted-foreground">Loading…</p>
+            ) : (
+              <form onSubmit={handleSaveSettings} className="mt-4 space-y-4">
+                {SETTING_DEFS.map((def) => {
+                  const val = settingsDraft[def.key] ?? "";
+                  const changed = val !== (serverSettings[def.key] ?? "");
+                  return (
+                    <div key={def.key}>
+                      <div className="flex items-center justify-between gap-2">
+                        <label
+                          htmlFor={`setting-${def.key}`}
+                          className="text-xs font-mono uppercase tracking-widest text-muted-foreground"
+                        >
+                          {def.label}
+                          {changed && <span className="ml-2 text-amber-300">· edited</span>}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleResetSetting(def.key)}
+                          className="font-mono text-[11px] text-muted-foreground hover:text-foreground"
+                        >
+                          reset
+                        </button>
+                      </div>
+                      {def.hint && (
+                        <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                          {def.hint}
+                        </p>
+                      )}
+                      {def.type === "boolean" ? (
+                        <label className="mt-1.5 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={val !== "0"}
+                            onChange={(e) =>
+                              setSettingsDraft({
+                                ...settingsDraft,
+                                [def.key]: e.target.checked ? "1" : "0",
+                              })
+                            }
+                            className="h-4 w-4 accent-current"
+                          />
+                          <span className="text-sm">
+                            {val !== "0" ? "Shown on site" : "Hidden from site"}
+                          </span>
+                        </label>
+                      ) : def.type === "textarea" || def.type === "list" ? (
+                        <textarea
+                          id={`setting-${def.key}`}
+                          value={val}
+                          onChange={(e) =>
+                            setSettingsDraft({ ...settingsDraft, [def.key]: e.target.value })
+                          }
+                          rows={def.type === "list" ? 4 : 3}
+                          className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-y font-mono"
+                        />
+                      ) : (
+                        <input
+                          id={`setting-${def.key}`}
+                          value={val}
+                          onChange={(e) =>
+                            setSettingsDraft({ ...settingsDraft, [def.key]: e.target.value })
+                          }
+                          className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      )}
+                      <p className="mt-0.5 font-mono text-[11px] text-muted-foreground break-all">
+                        key: {def.key}
+                      </p>
+                    </div>
+                  );
+                })}
+                <button
+                  type="submit"
+                  disabled={savingSettings}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-primary-foreground bg-gradient-to-r from-cyan to-violet disabled:opacity-60"
+                >
+                  {savingSettings ? "Saving…" : "Save settings"}
+                </button>
+              </form>
+            )}
           </div>
-
-          {loadingItems ? (
-            <p className="mt-4 font-mono text-xs text-muted-foreground">Loading…</p>
-          ) : visibleItems.length === 0 ? (
-            <div className="mt-4 rounded-xl border border-dashed border-border p-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                Nothing here yet.{" "}
-                {tab === "certification"
-                  ? "Seed certs show on the site until D1 rows exist."
-                  : "This section stays hidden on the site until you add a visible item."}
-              </p>
-              <div className="mt-3 flex flex-wrap justify-center gap-2">
+        ) : (
+          <div className="mt-4 glass rounded-2xl p-4 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-semibold">
+                {activeTab.label}{" "}
+                <span className="ml-1 font-mono text-xs text-muted-foreground">
+                  {visibleItems.length} item{visibleItems.length === 1 ? "" : "s"}
+                </span>
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={refreshItems}
+                  disabled={loadingItems}
+                  className="rounded-lg px-3 py-1.5 text-xs border border-border hover:bg-muted disabled:opacity-60"
+                >
+                  {loadingItems ? "Refreshing…" : "Refresh"}
+                </button>
+                <button
+                  onClick={handleExport}
+                  disabled={visibleItems.length === 0}
+                  className="rounded-lg px-3 py-1.5 text-xs border border-border hover:bg-muted disabled:opacity-30"
+                >
+                  Export JSON
+                </button>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={importingFile}
+                  className="rounded-lg px-3 py-1.5 text-xs border border-border hover:bg-muted disabled:opacity-60"
+                >
+                  {importingFile ? "Importing…" : "Import JSON"}
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleImportFile(f);
+                  }}
+                />
                 <button
                   onClick={openAdd}
-                  className="rounded-lg px-4 py-2 text-sm glass hover:bg-muted"
+                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-primary-foreground bg-gradient-to-r from-cyan to-violet"
                 >
-                  Add your first {activeTab.label.toLowerCase().slice(0, -1) || "item"}
+                  + Add
                 </button>
-                {showSeedImport && (
-                  <button
-                    onClick={handleSeedImport}
-                    disabled={importingSeeds}
-                    className="rounded-lg px-4 py-2 text-sm border border-border hover:bg-muted disabled:opacity-60"
-                  >
-                    {importingSeeds ? "Importing…" : "Import seed certifications"}
-                  </button>
-                )}
               </div>
             </div>
-          ) : (
-            <ul className="mt-4 space-y-2">
-              {visibleItems.map((item, idx) => {
-                const readOnly = typeof item.id === "string" && String(item.id).startsWith("seed");
-                return (
-                  <li
-                    key={String(item.id)}
-                    className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background/40 px-3 py-2.5"
+            <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+              {activeKind ? KIND_META_HELP[activeKind] : ""}
+            </p>
+
+            {loadingItems ? (
+              <p className="mt-4 font-mono text-xs text-muted-foreground">Loading…</p>
+            ) : visibleItems.length === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-border p-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Nothing here yet.{" "}
+                  {activeKind === "certification"
+                    ? "Seed certs show on the site until D1 rows exist."
+                    : activeKind === "research" || activeKind === "blog"
+                      ? "This section stays hidden on the site until you add a visible item."
+                      : "This section stays hidden on the site until you add a visible item."}
+                </p>
+                <div className="mt-3 flex flex-wrap justify-center gap-2">
+                  <button
+                    onClick={openAdd}
+                    className="rounded-lg px-4 py-2 text-sm glass hover:bg-muted"
                   >
-                    <span className="font-mono text-xs text-muted-foreground w-8">#{idx + 1}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold">
-                        {item.title}
-                        {readOnly && (
-                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                            seed
-                          </span>
-                        )}
-                        {!item.is_visible && (
-                          <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-200">
-                            hidden
-                          </span>
+                    Add your first item
+                  </button>
+                  {showSeedImport && (
+                    <button
+                      onClick={handleSeedImport}
+                      disabled={importingSeeds}
+                      className="rounded-lg px-4 py-2 text-sm border border-border hover:bg-muted disabled:opacity-60"
+                    >
+                      {importingSeeds ? "Importing…" : "Import seeds"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <ul className="mt-4 space-y-2">
+                {visibleItems.map((item, idx) => {
+                  const readOnly =
+                    typeof item.id === "string" && String(item.id).startsWith("seed");
+                  return (
+                    <li
+                      key={String(item.id)}
+                      className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background/40 px-3 py-2.5"
+                    >
+                      <span className="font-mono text-xs text-muted-foreground w-8">
+                        #{idx + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold">
+                          {item.title}
+                          {readOnly && (
+                            <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                              seed
+                            </span>
+                          )}
+                          {!item.is_visible && (
+                            <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-200">
+                              hidden
+                            </span>
+                          )}
+                        </div>
+                        {item.subtitle && (
+                          <div className="truncate font-mono text-[11px] text-muted-foreground">
+                            {item.subtitle}
+                          </div>
                         )}
                       </div>
-                      {item.subtitle && (
-                        <div className="truncate font-mono text-[11px] text-muted-foreground">
-                          {item.subtitle}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleMove(item, -1)}
-                        disabled={idx === 0 || readOnly}
-                        aria-label="Move up"
-                        className="grid h-7 w-7 place-items-center rounded-md hover:bg-muted disabled:opacity-30"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        onClick={() => handleMove(item, 1)}
-                        disabled={idx === visibleItems.length - 1 || readOnly}
-                        aria-label="Move down"
-                        className="grid h-7 w-7 place-items-center rounded-md hover:bg-muted disabled:opacity-30"
-                      >
-                        ↓
-                      </button>
-                      <button
-                        onClick={() => handleToggle(item)}
-                        disabled={readOnly}
-                        className="rounded-md px-2 py-1 text-xs hover:bg-muted disabled:opacity-30"
-                      >
-                        {item.is_visible ? "Hide" : "Show"}
-                      </button>
-                      <button
-                        onClick={() => openEdit(item)}
-                        className="rounded-md px-2 py-1 text-xs hover:bg-muted"
-                      >
-                        Edit
-                      </button>
-                      {!readOnly && (
+                      <div className="flex items-center gap-1">
                         <button
-                          onClick={() => handleDelete(item)}
-                          className="rounded-md px-2 py-1 text-xs text-red-300 hover:bg-red-500/10"
+                          onClick={() => handleMove(item, -1)}
+                          disabled={idx === 0 || readOnly}
+                          aria-label="Move up"
+                          className="grid h-7 w-7 place-items-center rounded-md hover:bg-muted disabled:opacity-30"
                         >
-                          Delete
+                          ↑
                         </button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                        <button
+                          onClick={() => handleMove(item, 1)}
+                          disabled={idx === visibleItems.length - 1 || readOnly}
+                          aria-label="Move down"
+                          className="grid h-7 w-7 place-items-center rounded-md hover:bg-muted disabled:opacity-30"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          onClick={() => handleToggle(item)}
+                          disabled={readOnly}
+                          className="rounded-md px-2 py-1 text-xs hover:bg-muted disabled:opacity-30"
+                        >
+                          {item.is_visible ? "Hide" : "Show"}
+                        </button>
+                        <button
+                          onClick={() => openEdit(item)}
+                          className="rounded-md px-2 py-1 text-xs hover:bg-muted"
+                        >
+                          Edit
+                        </button>
+                        {!readOnly && (
+                          <button
+                            onClick={() => handleDelete(item)}
+                            className="rounded-md px-2 py-1 text-xs text-red-300 hover:bg-red-500/10"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
-          {formOpen && (
-            <form
-              onSubmit={handleSave}
-              className="mt-4 rounded-xl border border-border p-4 space-y-3 bg-background/40"
-            >
-              <h3 className="font-semibold text-sm">
-                {editingId === null ? `Add ${activeTab.label.toLowerCase()}` : "Edit item"}
-              </h3>
-              <div className="grid sm:grid-cols-2 gap-3">
-                <label className="block sm:col-span-2">
-                  <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                    Title *
-                  </span>
-                  <input
-                    value={form.title}
-                    onChange={(e) => setForm({ ...form, title: e.target.value })}
-                    required
-                    maxLength={160}
-                    className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    placeholder={
-                      tab === "blog"
-                        ? "How I hardened my homelab"
-                        : tab === "research"
-                          ? "Paper title"
-                          : "Certificate name"
-                    }
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                    Subtitle
-                  </span>
-                  <input
-                    value={form.subtitle}
-                    onChange={(e) => setForm({ ...form, subtitle: e.target.value })}
-                    maxLength={160}
-                    className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    placeholder="TryHackMe · 2026 / Venue / Platform"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                    URL
-                  </span>
-                  <input
-                    value={form.url}
-                    onChange={(e) => setForm({ ...form, url: e.target.value })}
-                    inputMode="url"
-                    placeholder="https://… verify / article link"
-                    className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                </label>
-                <label className="block sm:col-span-2">
-                  <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                    Description
-                  </span>
-                  <textarea
-                    value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    rows={4}
-                    maxLength={4000}
-                    className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-y"
-                    placeholder="What is this? Skills covered, findings, takeaways…"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                    Tags (comma separated)
-                  </span>
-                  <input
-                    value={form.tags}
-                    onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                    className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    placeholder="Web Security, SOC, Kubernetes"
-                  />
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
+            {showSeedImport && visibleItems.length > 0 && (
+              <button
+                onClick={handleSeedImport}
+                disabled={importingSeeds}
+                className="mt-3 rounded-lg px-4 py-2 text-sm border border-border hover:bg-muted disabled:opacity-60"
+              >
+                {importingSeeds ? "Importing…" : "Import seeds"}
+              </button>
+            )}
+
+            {formOpen && activeKind && (
+              <form
+                onSubmit={handleSave}
+                className="mt-4 rounded-xl border border-border p-4 space-y-3 bg-background/40"
+              >
+                <h3 className="font-semibold text-sm">
+                  {editingId === null ? `Add ${activeTab.label.toLowerCase()}` : "Edit item"}
+                </h3>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <label className="block sm:col-span-2">
                     <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                      Sort order
+                      Title *
                     </span>
                     <input
-                      value={form.sort_order}
-                      onChange={(e) => setForm({ ...form, sort_order: e.target.value })}
-                      inputMode="numeric"
+                      value={form.title}
+                      onChange={(e) => setForm({ ...form, title: e.target.value })}
+                      required
+                      maxLength={160}
+                      className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      placeholder="Item title"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                      Subtitle
+                    </span>
+                    <input
+                      value={form.subtitle}
+                      onChange={(e) => setForm({ ...form, subtitle: e.target.value })}
+                      maxLength={160}
+                      className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      placeholder="Venue / tag / group sub-line"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                      URL
+                    </span>
+                    <input
+                      value={form.url}
+                      onChange={(e) => setForm({ ...form, url: e.target.value })}
+                      inputMode="url"
+                      placeholder="https://…"
                       className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                   </label>
-                  <label className="flex items-end gap-2 pb-2">
-                    <input
-                      type="checkbox"
-                      checked={form.is_visible}
-                      onChange={(e) => setForm({ ...form, is_visible: e.target.checked })}
-                      className="h-4 w-4 accent-current"
+                  <label className="block sm:col-span-2">
+                    <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                      Description
+                    </span>
+                    <textarea
+                      value={form.description}
+                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                      rows={4}
+                      maxLength={4000}
+                      className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-y"
+                      placeholder="Body text…"
                     />
-                    <span className="text-sm">Visible on site</span>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                      Tags (comma separated)
+                    </span>
+                    <input
+                      value={form.tags}
+                      onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                      className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      placeholder="stack / skills / chips"
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                        Sort order
+                      </span>
+                      <input
+                        value={form.sort_order}
+                        onChange={(e) => setForm({ ...form, sort_order: e.target.value })}
+                        inputMode="numeric"
+                        className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                    </label>
+                    <label className="flex items-end gap-2 pb-2">
+                      <input
+                        type="checkbox"
+                        checked={form.is_visible}
+                        onChange={(e) => setForm({ ...form, is_visible: e.target.checked })}
+                        className="h-4 w-4 accent-current"
+                      />
+                      <span className="text-sm">Visible on site</span>
+                    </label>
+                  </div>
+                  <label className="block sm:col-span-2">
+                    <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                      Image URL (optional)
+                    </span>
+                    <input
+                      value={form.image}
+                      onChange={(e) => setForm({ ...form, image: e.target.value })}
+                      inputMode="url"
+                      placeholder="/… or https://…"
+                      className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    />
+                  </label>
+                  <label className="block sm:col-span-2">
+                    <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                      Meta JSON (advanced)
+                    </span>
+                    <textarea
+                      value={form.meta}
+                      onChange={(e) => setForm({ ...form, meta: e.target.value })}
+                      rows={3}
+                      spellCheck={false}
+                      className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-y font-mono"
+                      placeholder='{"long": "…", "demo": "https://…"}'
+                    />
+                    <span className="mt-1 block font-mono text-[11px] text-muted-foreground">
+                      {activeKind ? KIND_META_HELP[activeKind] : ""}
+                    </span>
                   </label>
                 </div>
-                <label className="block sm:col-span-2">
-                  <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                    Image URL (optional)
-                  </span>
-                  <input
-                    value={form.image}
-                    onChange={(e) => setForm({ ...form, image: e.target.value })}
-                    inputMode="url"
-                    placeholder="/certs/… or https://…"
-                    className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                </label>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-primary-foreground bg-gradient-to-r from-cyan to-violet disabled:opacity-60"
-                >
-                  {saving ? "Saving…" : editingId === null ? "Add item" : "Save changes"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormOpen(false)}
-                  className="rounded-lg px-4 py-2 text-sm border border-border hover:bg-muted"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-lg px-4 py-2 text-sm font-medium text-primary-foreground bg-gradient-to-r from-cyan to-violet disabled:opacity-60"
+                  >
+                    {saving ? "Saving…" : editingId === null ? "Add item" : "Save changes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormOpen(false)}
+                    className="rounded-lg px-4 py-2 text-sm border border-border hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
         <div className="mt-4 glass rounded-2xl p-4 sm:p-6">
           <h2 className="font-semibold">Change password</h2>
@@ -853,7 +1169,8 @@ function AdminPage() {
 
         <p className="mt-4 font-mono text-[11px] text-muted-foreground">
           Sorting: use ↑ ↓ — order saves automatically and the public site follows sort_order.
-          Hidden items never render publicly. Research &amp; Blogs sections auto-hide when empty.
+          Hidden items and hidden sections never render publicly. Research &amp; Blogs sections
+          auto-hide when empty. Export JSON regularly as a backup; Import JSON restores it.
         </p>
       </div>
     </main>

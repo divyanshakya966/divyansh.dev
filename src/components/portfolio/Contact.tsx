@@ -3,9 +3,22 @@ import { Section } from "./Section";
 import { ArrowUpRight, Github, Linkedin, Mail, Send } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
+import { useSiteSettings } from "@/hooks/use-content";
+import { isSectionVisible } from "@/lib/settings";
 
 export function Contact() {
   const [sending, setSending] = useState(false);
+  const { settings } = useSiteSettings();
+  const email = settings.contact_email?.trim() || "divyanshakya.dev@gmail.com";
+  const github = settings.social_github?.trim() || "https://github.com/divyanshakya966";
+  const linkedin =
+    settings.social_linkedin?.trim() || "https://www.linkedin.com/in/divyanshakya966";
+  const status = settings.contact_status?.trim() || "AVAILABLE · Bhopal, India";
+  const blurb =
+    settings.contact_blurb?.trim() ||
+    "Open to Cybersecurity and DevSecOps internships, hackathons and meaningful OSS work.";
+
+  if (!isSectionVisible(settings, "contact")) return null;
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -117,23 +130,18 @@ export function Contact() {
         </form>
 
         <div className="reveal lg:col-span-2 space-y-3">
+          <SocialLink href={`mailto:${email}`} icon={Mail} label="Email" sub={email} />
           <SocialLink
-            href="mailto:divyanshakya.dev@gmail.com"
-            icon={Mail}
-            label="Email"
-            sub="divyanshakya.dev@gmail.com"
-          />
-          <SocialLink
-            href="https://github.com/divyanshakya966"
+            href={github}
             icon={Github}
             label="GitHub"
-            sub="@divyanshakya966"
+            sub={`@${github.split("/").filter(Boolean).pop() ?? "divyanshakya966"}`}
           />
           <SocialLink
-            href="https://www.linkedin.com/in/divyanshakya966"
+            href={linkedin}
             icon={Linkedin}
             label="LinkedIn"
-            sub="in/divyanshakya966"
+            sub={linkedin.includes("/in/") ? `in/${linkedin.split("/in/")[1]}` : "LinkedIn"}
           />
           <div className="glass rounded-2xl p-5 mt-2">
             <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
@@ -141,11 +149,9 @@ export function Contact() {
                 <span className="absolute inline-flex h-full w-full rounded-full bg-cyan opacity-75 animate-ping" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
               </span>
-              AVAILABLE · Bhopal, India
+              {status}
             </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Open to Cybersecurity and DevSecOps internships, hackathons and meaningful OSS work.
-            </p>
+            <p className="mt-2 text-sm text-muted-foreground">{blurb}</p>
           </div>
         </div>
       </div>

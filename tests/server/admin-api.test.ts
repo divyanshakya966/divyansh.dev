@@ -30,6 +30,7 @@ class FakeD1 {
   users: Row[] = [];
   sessions: Row[] = [];
   items: Row[] = [];
+  settings: Row[] = [];
   seq = 1;
   useq = 1;
 
@@ -61,6 +62,9 @@ class FakeD1 {
   }
 
   handleAll(sql: string, p: unknown[]): Row[] {
+    if (sql.includes("FROM site_settings")) {
+      return [...this.settings];
+    }
     const visible = sql.includes("is_visible = 1");
     const byKind = sql.includes("WHERE kind = ?");
     let rows = [...this.items];
@@ -106,15 +110,16 @@ class FakeD1 {
         url: p[4],
         image: p[5],
         tags: p[6],
-        sort_order: p[7],
-        is_visible: p[8],
-        created_at: p[9],
-        updated_at: p[10],
+        meta: p[7],
+        sort_order: p[8],
+        is_visible: p[9],
+        created_at: p[10],
+        updated_at: p[11],
       });
       return { success: true, meta: { last_row_id: id } };
     }
     if (sql.startsWith("UPDATE content_items SET kind")) {
-      const row = this.items.find((i) => i.id === p[10]);
+      const row = this.items.find((i) => i.id === p[11]);
       if (row) {
         row.kind = p[0];
         row.title = p[1];
@@ -123,9 +128,10 @@ class FakeD1 {
         row.url = p[4];
         row.image = p[5];
         row.tags = p[6];
-        row.sort_order = p[7];
-        row.is_visible = p[8];
-        row.updated_at = p[9];
+        row.meta = p[7];
+        row.sort_order = p[8];
+        row.is_visible = p[9];
+        row.updated_at = p[10];
       }
       return { success: true };
     }
@@ -139,6 +145,20 @@ class FakeD1 {
     }
     if (sql.startsWith("DELETE FROM content_items WHERE id")) {
       this.items = this.items.filter((i) => i.id !== p[0]);
+      return { success: true };
+    }
+    if (sql.startsWith("INSERT INTO site_settings")) {
+      const existing = this.settings.find((s) => s.key === p[0]);
+      if (existing) {
+        existing.value = p[1];
+        existing.updated_at = p[2];
+      } else {
+        this.settings.push({ key: p[0], value: p[1], updated_at: p[2] });
+      }
+      return { success: true };
+    }
+    if (sql.startsWith("DELETE FROM site_settings WHERE key")) {
+      this.settings = this.settings.filter((s) => s.key !== p[0]);
       return { success: true };
     }
     throw new Error("Unhandled SQL in fake: " + sql);
@@ -556,5 +576,190 @@ describe("admin API with D1", () => {
       {},
     );
     expect(badReorder.status).toBe(400);
+  });
+});
+
+describe("full-portfolio control: projects, settings, generalized seeds", () => {
+  async function authedDb(ipBase: string) {
+    const db = new FakeD1();
+    await seedAdmin(db, "divyansh", "correct-horse-battery-99");
+    const cookie = cookieFrom(await login(db, "divyansh", "correct-horse-battery-99", ipBase));
+    return { db, auth: { cookie }, ipBase };
+  }
+
+  it("serves seed projects/experience publicly until D1 rows exist", async () => {
+    const db = new FakeD1();
+    const projects = (await (
+      await server.fetch(req("/api/content?kind=project"), { DB: db }, {})
+    ).json()) as { items: { title: string; tags: string[] }[] };
+    expect(projects.items).toHaveLength(6);
+    expect(projects.items[0]).toMatchObject({ title: "AegisStack" });
+
+    const exp = (await (
+      await server.fetch(req("/api/content?kind=experience"), { DB: db }, {})
+    ).json()) as { items: { title: string }[] };
+    expect(exp.items).toHaveLength(5);
+  });
+
+  it("project CRUD round-trips meta (long + demo) to the public site", async () => {
+    const { db, auth, ipBase } = await authedDb("10.0.6.1");
+    const created = (await (
+      await server.fetch(
+        req(
+          "/api/admin/items",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              kind: "project",
+              title: "Meta Project",
+              subtitle: "Test",
+              description: "Short",
+              url: "https://github.com/x/y",
+              tags: ["A"],
+              meta: { long: "Long body", demo: "https://demo.example" },
+              sort_order: 1,
+              is_visible: true,
+            }),
+            headers: auth,
+          },
+          ipBase,
+        ),
+        { DB: db },
+        {},
+      )
+    ).json()) as { id: number };
+
+    const pub = (await (
+      await server.fetch(req("/api/content?kind=project"), { DB: db }, {})
+    ).json()) as { items: { id: number; meta: Record<string, unknown> }[] };
+    const row = pub.items.find((i) => i.id === created.id);
+    expect(row?.meta).toMatchObject({ long: "Long body", demo: "https://demo.example" });
+    // D1 rows now own the kind: seeds must not leak back in.
+    expect(pub.items.some((i) => typeof i.id === "string")).toBe(false);
+  });
+
+  it("rejects invalid meta payloads", async () => {
+    const { db, auth, ipBase } = await authedDb("10.0.6.2");
+    const bad = await server.fetch(
+      req(
+        "/api/admin/items",
+        {
+          method: "POST",
+          body: JSON.stringify({ kind: "project", title: "T", meta: "not-json{" }),
+          headers: auth,
+        },
+        ipBase,
+      ),
+      { DB: db },
+      {},
+    );
+    expect(bad.status).toBe(400);
+  });
+
+  it("seed import works per kind and refuses kinds without seeds", async () => {
+    const { db, auth, ipBase } = await authedDb("10.0.6.3");
+    const skills = await server.fetch(
+      req(
+        "/api/admin/seed-import",
+        { method: "POST", body: JSON.stringify({ kind: "skill" }), headers: auth },
+        ipBase,
+      ),
+      { DB: db },
+      {},
+    );
+    expect(skills.status).toBe(201);
+    expect(((await skills.json()) as { imported: number }).imported).toBe(4);
+
+    const research = await server.fetch(
+      req(
+        "/api/admin/seed-import",
+        { method: "POST", body: JSON.stringify({ kind: "research" }), headers: auth },
+        ipBase,
+      ),
+      { DB: db },
+      {},
+    );
+    expect(research.status).toBe(400);
+  });
+
+  it("settings: public defaults, authed update, validation, reset", async () => {
+    // Public defaults without DB.
+    const pub = (await (await server.fetch(req("/api/settings"), {}, {})).json()) as {
+      settings: Record<string, string>;
+    };
+    expect(pub.settings.contact_email).toBe("divyanshakya.dev@gmail.com");
+    expect(pub.settings.section_projects_visible).toBe("1");
+
+    const { db, auth, ipBase } = await authedDb("10.0.6.4");
+    const anon = await server.fetch(req("/api/admin/settings"), { DB: db }, {});
+    expect(anon.status).toBe(401);
+
+    const badKey = await server.fetch(
+      req(
+        "/api/admin/settings",
+        { method: "PUT", body: JSON.stringify({ key: "nope", value: "x" }), headers: auth },
+        ipBase,
+      ),
+      { DB: db },
+      {},
+    );
+    expect(badKey.status).toBe(400);
+
+    const badEmail = await server.fetch(
+      req(
+        "/api/admin/settings",
+        {
+          method: "PUT",
+          body: JSON.stringify({ key: "contact_email", value: "not-an-email" }),
+          headers: auth,
+        },
+        ipBase,
+      ),
+      { DB: db },
+      {},
+    );
+    expect(badEmail.status).toBe(400);
+
+    const hide = await server.fetch(
+      req(
+        "/api/admin/settings",
+        {
+          method: "PUT",
+          body: JSON.stringify({ key: "section_projects_visible", value: "0" }),
+          headers: auth,
+        },
+        ipBase,
+      ),
+      { DB: db },
+      {},
+    );
+    expect(hide.status).toBe(200);
+
+    const after = (await (await server.fetch(req("/api/settings"), { DB: db }, {})).json()) as {
+      settings: Record<string, string>;
+    };
+    expect(after.settings.section_projects_visible).toBe("0");
+    expect(after.settings.contact_email).toBe("divyanshakya.dev@gmail.com");
+
+    // Admin read-back shows merged values.
+    const adminRead = (await (
+      await server.fetch(req("/api/admin/settings", { headers: auth }, ipBase), { DB: db }, {})
+    ).json()) as { settings: Record<string, string> };
+    expect(adminRead.settings.section_projects_visible).toBe("0");
+
+    const reset = await server.fetch(
+      req(
+        "/api/admin/settings/section_projects_visible",
+        { method: "DELETE", headers: auth },
+        ipBase,
+      ),
+      { DB: db },
+      {},
+    );
+    expect(reset.status).toBe(200);
+    const restored = (await (await server.fetch(req("/api/settings"), { DB: db }, {})).json()) as {
+      settings: Record<string, string>;
+    };
+    expect(restored.settings.section_projects_visible).toBe("1");
   });
 });

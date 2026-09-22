@@ -1,22 +1,17 @@
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUpRight } from "lucide-react";
+import { useSiteSettings } from "@/hooks/use-content";
+import { DEFAULT_HERO_ROLES, settingLines } from "@/lib/settings";
 
-const ROLES = [
-  "Cybersecurity Trainee",
-  "DevSecOps Practitioner",
-  "AI & Cloud Security",
-  "Linux & Open Source",
-];
-
-function useTyping(enabled: boolean) {
+function useTyping(roles: string[], enabled: boolean) {
   const [i, setI] = useState(0);
   const [text, setText] = useState("");
   const [del, setDel] = useState(false);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || roles.length === 0) return;
 
-    const current = ROLES[i];
+    const current = roles[i % roles.length]!;
     const speed = del ? 35 : 65;
     let holdT: ReturnType<typeof setTimeout> | undefined;
 
@@ -32,7 +27,7 @@ function useTyping(enabled: boolean) {
         setText(next);
         if (next === "") {
           setDel(false);
-          setI((v) => (v + 1) % ROLES.length);
+          setI((v) => (v + 1) % roles.length);
         }
       }
     }, speed);
@@ -41,7 +36,7 @@ function useTyping(enabled: boolean) {
       clearTimeout(t);
       if (holdT) clearTimeout(holdT);
     };
-  }, [text, del, i, enabled]);
+  }, [text, del, i, enabled, roles]);
 
   return text;
 }
@@ -75,7 +70,12 @@ function CharSplit({
 }
 
 export function Hero({ booted }: { booted: boolean }) {
-  const typed = useTyping(booted);
+  const { settings } = useSiteSettings();
+  const configured = settingLines(settings, "hero_roles");
+  const roles = configured.length > 0 ? configured : DEFAULT_HERO_ROLES;
+  const tagline = settingLines(settings, "hero_tagline");
+  const location = settingLines(settings, "hero_location");
+  const typed = useTyping(roles, booted);
   const [scrollY, setScrollY] = useState(0);
   const [isGlitching, setIsGlitching] = useState(false);
 
@@ -199,8 +199,9 @@ export function Hero({ booted }: { booted: boolean }) {
           <div
             className={`font-mono text-[11px] sm:text-xs text-muted-foreground max-w-xs text-center sm:text-left ${booted ? "animate-fade-in [animation-delay:1300ms]" : "boot-gated"}`}
           >
-            Building secure, scalable systems
-            <br />— DevSecOps · Linux · Cloud.
+            {tagline[0] ?? "Building secure, scalable systems"}
+            <br />
+            {tagline[1] ?? "— DevSecOps · Linux · Cloud."}
           </div>
 
           <a
@@ -218,9 +219,9 @@ export function Hero({ booted }: { booted: boolean }) {
           <div
             className={`font-mono text-[11px] sm:text-xs text-muted-foreground text-center sm:text-right ${booted ? "animate-fade-in [animation-delay:1500ms]" : "boot-gated"}`}
           >
-            Bhopal, India · Open to
+            {location[0] ?? "Bhopal, India · Open to"}
             <br />
-            internships & hackathons
+            {location[1] ?? "internships & hackathons"}
           </div>
         </div>
 
