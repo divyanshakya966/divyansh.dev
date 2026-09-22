@@ -20,6 +20,9 @@ const SELECTOR = ".reveal, .reveal-child";
 export function useReveal(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
+    // Guarded: a late re-run without observer globals (test teardown races,
+    // exotic runtimes) must skip instead of throwing on the constructor.
+    if (typeof IntersectionObserver === "undefined") return;
 
     // Once a reveal completes, drop the stagger delay so hover transitions stay snappy.
     const clearDelay = (el: HTMLElement) => {
@@ -66,22 +69,25 @@ export function useReveal(enabled = true) {
     document.querySelectorAll<HTMLElement>(".reveal-stagger").forEach(staggerize);
     collect(document);
 
-    const mo = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        m.addedNodes.forEach((node) => {
-          if (!(node instanceof Element)) return;
-          if (node.matches(SELECTOR)) observe(node as HTMLElement);
-          collect(node);
-          if (node.matches(".reveal-stagger")) staggerize(node);
-          node.querySelectorAll(".reveal-stagger").forEach((p) => staggerize(p));
-        });
-      }
-    });
-    mo.observe(document.body, { childList: true, subtree: true });
+    let mo: MutationObserver | undefined;
+    if (typeof MutationObserver !== "undefined") {
+      mo = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          m.addedNodes.forEach((node) => {
+            if (!(node instanceof Element)) return;
+            if (node.matches(SELECTOR)) observe(node as HTMLElement);
+            collect(node);
+            if (node.matches(".reveal-stagger")) staggerize(node);
+            node.querySelectorAll(".reveal-stagger").forEach((p) => staggerize(p));
+          });
+        }
+      });
+      mo.observe(document.body, { childList: true, subtree: true });
+    }
 
     return () => {
       io.disconnect();
-      mo.disconnect();
+      mo?.disconnect();
     };
   }, [enabled]);
 }

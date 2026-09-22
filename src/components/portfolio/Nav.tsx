@@ -124,6 +124,10 @@ export function Nav() {
   }, []);
 
   useEffect(() => {
+    // Guarded: without this, a late state update (e.g. a fetch resolving
+    // after test teardown unstubs the mock) crashes on the bare constructor.
+    // Same guard in use-reveal.ts.
+    if (typeof IntersectionObserver === "undefined") return;
     const ids = links.map((l) => l.href.slice(1));
     const io = new IntersectionObserver(
       (entries) => {
@@ -151,11 +155,14 @@ export function Nav() {
       });
     };
     collect();
-    const mo = new MutationObserver(collect);
-    mo.observe(document.body, { childList: true, subtree: true });
+    let mo: MutationObserver | undefined;
+    if (typeof MutationObserver !== "undefined") {
+      mo = new MutationObserver(collect);
+      mo.observe(document.body, { childList: true, subtree: true });
+    }
     return () => {
       io.disconnect();
-      mo.disconnect();
+      mo?.disconnect();
     };
     // Re-collect when the link set changes (published/hidden sections).
     // eslint-disable-next-line react-hooks/exhaustive-deps

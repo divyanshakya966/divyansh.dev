@@ -108,4 +108,12 @@ describe("useReveal", () => {
     act(() => io.intersect(next));
     expect(next).toHaveClass("in");
   });
+
+  it("skips silently when observer globals are missing", () => {
+    vi.stubGlobal("IntersectionObserver", undefined as never);
+    vi.stubGlobal("MutationObserver", undefined as never);
+    document.body.innerHTML = `<div class="reveal">One</div>`;
+    renderHook(() => useReveal());
+    expect(document.querySelector(".reveal")).not.toHaveClass("in");
+  });
 });

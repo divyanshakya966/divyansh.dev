@@ -120,4 +120,16 @@ describe("Nav", () => {
     });
     expect(screen.getByRole("link", { name: "Projects" })).toBeInTheDocument();
   });
+
+  it("survives observer globals going missing (late effect runs)", () => {
+    // Fetch never settles; the effect must skip observer construction
+    // instead of throwing on the bare constructor.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise(() => {})),
+    );
+    vi.stubGlobal("IntersectionObserver", undefined as never);
+    render(<Nav />);
+    expect(screen.getByRole("link", { name: "Projects" })).toBeInTheDocument();
+  });
 });
