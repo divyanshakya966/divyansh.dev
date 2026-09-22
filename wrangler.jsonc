@@ -24,7 +24,7 @@
 	//        npx wrangler d1 migrations apply portfolio-db --remote
 	"d1_databases": [
 		{
-			"binding": "portfolio_db",
+			"binding": "DB",
 			"database_name": "portfolio-db",
 			"database_id": "39e28a4a-591e-4474-b7b6-c6f0033fd03b",
 			"remote": true
