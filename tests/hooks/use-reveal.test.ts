@@ -67,4 +67,45 @@ describe("useReveal", () => {
     act(() => io.intersect(els[0]));
     expect(unobserveSpy).toHaveBeenCalledWith(els[0]);
   });
+
+  it("observes .reveal elements mounted after hook setup (dynamic content)", async () => {
+    document.body.innerHTML = `<div id="host"></div>`;
+    renderHook(() => useReveal());
+    const [io] = window.__ioInstances;
+    const observeSpy = vi.spyOn(io, "observe");
+    const host = document.getElementById("host")!;
+    await act(async () => {
+      host.innerHTML = `<div class="reveal">Late</div>`;
+    });
+    const late = host.querySelector<HTMLElement>(".reveal")!;
+    expect(observeSpy).toHaveBeenCalledWith(late);
+    act(() => io.intersect(late));
+    expect(late).toHaveClass("in");
+  });
+
+  it("applies stagger delays to late-mounted children", async () => {
+    document.body.innerHTML = `<div id="host"><div class="reveal-stagger"></div></div>`;
+    renderHook(() => useReveal());
+    const stagger = document.querySelector(".reveal-stagger")!;
+    await act(async () => {
+      stagger.innerHTML = `<div class="reveal">A</div><div class="reveal">B</div>`;
+    });
+    const kids = [...stagger.querySelectorAll<HTMLElement>(".reveal")];
+    expect(kids[0]?.style.transitionDelay).toBe("0ms");
+    expect(kids[1]?.style.transitionDelay).toBe("80ms");
+  });
+
+  it("reveals remounted cards (seed keys swapping for database ids)", async () => {
+    document.body.innerHTML = `<div id="host"><div class="reveal" data-key="seed-1">Old</div></div>`;
+    renderHook(() => useReveal());
+    const [io] = window.__ioInstances;
+    const host = document.getElementById("host")!;
+    // Simulate React remounting the card with a database id after fetch.
+    await act(async () => {
+      host.innerHTML = `<div class="reveal" data-key="23">New</div>`;
+    });
+    const next = host.querySelector<HTMLElement>(".reveal")!;
+    act(() => io.intersect(next));
+    expect(next).toHaveClass("in");
+  });
 });
