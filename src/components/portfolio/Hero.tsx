@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUpRight } from "lucide-react";
 import { useSiteSettings } from "@/hooks/use-content";
 import { DEFAULT_HERO_ROLES, settingLines } from "@/lib/settings";
@@ -71,8 +71,12 @@ function CharSplit({
 
 export function Hero({ booted }: { booted: boolean }) {
   const { settings } = useSiteSettings();
-  const configured = settingLines(settings, "hero_roles");
-  const roles = configured.length > 0 ? configured : DEFAULT_HERO_ROLES;
+  // Memoized: useTyping depends on array identity — a fresh array per render
+  // would reset the typing timer on every scroll (typing would stall).
+  const roles = useMemo(() => {
+    const configured = settingLines(settings, "hero_roles");
+    return configured.length > 0 ? configured : DEFAULT_HERO_ROLES;
+  }, [settings]);
   const tagline = settingLines(settings, "hero_tagline");
   const location = settingLines(settings, "hero_location");
   const typed = useTyping(roles, booted);

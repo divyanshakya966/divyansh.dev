@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
+import { safeHref } from "@/lib/utils";
 import type { ContentItem } from "@/lib/content";
 
 type Project = {
@@ -26,7 +27,9 @@ type Project = {
 function toProject(item: ContentItem): Project {
   const meta = item.meta ?? {};
   const long = typeof meta.long === "string" && meta.long.trim() ? meta.long : item.description;
-  const demo = typeof meta.demo === "string" && meta.demo.trim() ? meta.demo : undefined;
+  // meta.demo is free-form admin input — only render safe http(s) URLs.
+  const demoRaw = typeof meta.demo === "string" ? meta.demo : "";
+  const demo = safeHref(demoRaw) || undefined;
   return {
     id: String(item.id),
     title: item.title,

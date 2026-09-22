@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cn } from "@/lib/utils";
+import { cn, isSafeHttpUrl, safeHref } from "@/lib/utils";
 
 describe("cn", () => {
   it("returns an empty string when given nothing", () => {
@@ -25,5 +25,19 @@ describe("cn", () => {
 
   it("keeps non-conflicting tailwind utilities intact", () => {
     expect(cn("p-2", "text-sm", "rounded-lg")).toBe("p-2 text-sm rounded-lg");
+  });
+});
+
+describe("safe URLs", () => {
+  it("accepts http(s) and same-origin paths, rejects the rest", () => {
+    expect(isSafeHttpUrl("https://example.com/x")).toBe(true);
+    expect(isSafeHttpUrl("http://example.com")).toBe(true);
+    expect(isSafeHttpUrl("javascript:alert(1)")).toBe(false);
+    expect(isSafeHttpUrl("data:text/html,x")).toBe(false);
+    expect(isSafeHttpUrl("")).toBe(false);
+    expect(safeHref("https://example.com", "fallback")).toBe("https://example.com");
+    expect(safeHref("/local/path", "fallback")).toBe("/local/path");
+    expect(safeHref("javascript:alert(1)", "fallback")).toBe("fallback");
+    expect(safeHref("  ", "fallback")).toBe("fallback");
   });
 });

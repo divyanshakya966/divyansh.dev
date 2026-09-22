@@ -115,7 +115,8 @@ Set up D1 before deploying — the fallback is local-only.
   `research`, `blog`, `project`, `experience`, `achievement`, `skill`, `about`,
   `building`.
 - `GET /api/settings` — public merged site settings (cached).
-- `GET /api/admin/status` — `{ db, hasAdmin }` (setup probe).
+- `GET /api/admin/status` — `{ db, hasAdmin, metaReady }` (setup + schema probe;
+  if `metaReady` is false, apply migration 0002).
 - `POST /api/admin/login|logout`, `GET /api/admin/me`
 - `GET|POST /api/admin/items?kind=all|…`, `PUT|DELETE /api/admin/items/:id`
 - `POST /api/admin/reorder` `{ kind, ids }`, `PUT /api/admin/password`

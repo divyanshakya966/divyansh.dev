@@ -1063,7 +1063,18 @@ async function handleAdminRequest(request: Request, env: unknown): Promise<Respo
 
   if (path === "/api/admin/status" && request.method === "GET") {
     const db = getDb(env);
-    return jsonResponse({ db: Boolean(db), hasAdmin: await hasAnyAdmin(env) });
+    let metaReady = true;
+    if (db) {
+      // Migration 0002 adds the meta column + site_settings. If it hasn't
+      // been applied, content writes fail while reads fall back to seeds —
+      // surface that explicitly instead of failing opaquely in /admin.
+      try {
+        await db.prepare("SELECT meta FROM content_items LIMIT 1").first();
+      } catch {
+        metaReady = false;
+      }
+    }
+    return jsonResponse({ db: Boolean(db), hasAdmin: await hasAnyAdmin(env), metaReady });
   }
   if (path === "/api/admin/login" && request.method === "POST") {
     return handleAdminLogin(request, env);

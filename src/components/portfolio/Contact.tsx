@@ -5,14 +5,19 @@ import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
+import { safeHref } from "@/lib/utils";
+
+const DEFAULT_EMAIL = "divyanshakya.dev@gmail.com";
+const DEFAULT_GITHUB = "https://github.com/divyanshakya966";
+const DEFAULT_LINKEDIN = "https://www.linkedin.com/in/divyanshakya966";
 
 export function Contact() {
   const [sending, setSending] = useState(false);
   const { settings } = useSiteSettings();
-  const email = settings.contact_email?.trim() || "divyanshakya.dev@gmail.com";
-  const github = settings.social_github?.trim() || "https://github.com/divyanshakya966";
-  const linkedin =
-    settings.social_linkedin?.trim() || "https://www.linkedin.com/in/divyanshakya966";
+  const emailRaw = (settings.contact_email ?? "").trim();
+  const email = emailRaw.includes("@") ? emailRaw : DEFAULT_EMAIL;
+  const github = safeHref(settings.social_github ?? "", DEFAULT_GITHUB) || DEFAULT_GITHUB;
+  const linkedin = safeHref(settings.social_linkedin ?? "", DEFAULT_LINKEDIN) || DEFAULT_LINKEDIN;
   const status = settings.contact_status?.trim() || "AVAILABLE · Bhopal, India";
   const blurb =
     settings.contact_blurb?.trim() ||

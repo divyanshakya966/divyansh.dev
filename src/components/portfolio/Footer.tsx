@@ -1,8 +1,11 @@
 import { useSiteSettings } from "@/hooks/use-content";
+import { safeHref } from "@/lib/utils";
+
+const DEFAULT_REPO = "https://github.com/divyanshakya966/divyansh.dev";
 
 export function Footer() {
   const { settings } = useSiteSettings();
-  const repo = settings.footer_repo?.trim() || "https://github.com/divyanshakya966/divyansh.dev";
+  const repo = safeHref(settings.footer_repo ?? "", DEFAULT_REPO) || DEFAULT_REPO;
   return (
     <footer className="border-t border-border mt-10">
       <div

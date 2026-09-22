@@ -205,7 +205,7 @@ beforeEach(() => {
 describe("admin API without DB (local fallback)", () => {
   it("reports status and serves seed certifications", async () => {
     const status = await server.fetch(req("/api/admin/status"), {}, {});
-    expect(await status.json()).toEqual({ db: false, hasAdmin: false });
+    expect(await status.json()).toEqual({ db: false, hasAdmin: false, metaReady: true });
 
     const res = await server.fetch(req("/api/content?kind=certification"), {}, {});
     const data = (await res.json()) as { items: { title: string; url: string }[] };
@@ -540,6 +540,14 @@ describe("admin API with D1", () => {
     ).toBe(401);
     expect((await login(db, "divyansh", "correct-horse-battery-99", "10.0.4.3")).status).toBe(401);
     expect((await login(db, "divyansh", "new-long-password-456", "10.0.4.4")).status).toBe(200);
+  });
+
+  it("reports schema readiness once D1 is bound", async () => {
+    const db = new FakeD1();
+    const status = (await (
+      await server.fetch(req("/api/admin/status"), { DB: db }, {})
+    ).json()) as { db: boolean; hasAdmin: boolean; metaReady: boolean };
+    expect(status).toEqual({ db: true, hasAdmin: false, metaReady: true });
   });
 
   it("rejects invalid item payloads and seed-id edits", async () => {

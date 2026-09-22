@@ -10,7 +10,7 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type Status = { db: boolean; hasAdmin: boolean };
+type Status = { db: boolean; hasAdmin: boolean; metaReady: boolean };
 type Tab = ContentKind | "settings";
 
 const TABS: { kind: Tab; label: string; hint: string }[] = [
@@ -474,14 +474,29 @@ function AdminPage() {
           ? (parsed as { items: unknown[] }).items
           : null;
       if (!arr) throw new Error("File must contain a JSON array (or { items: [...] }).");
+      if (arr.length === 0) throw new Error("Nothing to import.");
+      if (arr.length > 200) throw new Error("Import is capped at 200 items per file.");
       let added = 0;
-      for (const raw of arr) {
-        if (!raw || typeof raw !== "object") continue;
-        const body = { ...(raw as Record<string, unknown>), kind: activeKind };
-        await api("/api/admin/items", { method: "POST", body: JSON.stringify(body) });
-        added++;
+      const skipped: number[] = [];
+      for (let idx = 0; idx < arr.length; idx++) {
+        const raw = arr[idx];
+        if (!raw || typeof raw !== "object") {
+          skipped.push(idx + 1);
+          continue;
+        }
+        try {
+          const body = { ...(raw as Record<string, unknown>), kind: activeKind };
+          await api("/api/admin/items", { method: "POST", body: JSON.stringify(body) });
+          added++;
+        } catch {
+          skipped.push(idx + 1);
+        }
       }
-      setNotice(`Imported ${added} item(s) into ${activeKind}.`);
+      const skippedNote =
+        skipped.length > 0
+          ? `, skipped ${skipped.length} (row${skipped.length === 1 ? "" : "s"} ${skipped.slice(0, 8).join(", ")}${skipped.length > 8 ? "…" : ""})`
+          : "";
+      setNotice(`Imported ${added} item(s) into ${activeKind}${skippedNote}.`);
       await refreshItems();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed.");
@@ -676,6 +691,17 @@ function AdminPage() {
             className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"
           >
             {error}
+          </div>
+        )}
+        {status?.db === true && status.metaReady === false && (
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200"
+          >
+            Database schema is outdated (missing migration 0002). Run{" "}
+            <code className="font-mono">npm run db:migrate:remote</code> (and{" "}
+            <code className="font-mono">:local</code> for dev), then Refresh. The public site keeps
+            serving seed content meanwhile.
           </div>
         )}
         {notice && (
