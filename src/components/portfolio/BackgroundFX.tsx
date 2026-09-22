@@ -31,6 +31,10 @@ export function BackgroundFX() {
 
     const setup = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      // Explicit reset: canvas resizing already clears the transform, but
+      // this keeps setup idempotent if the order ever changes (otherwise
+      // repeated scales compound and the rain shrinks off-canvas).
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
       canvas.style.width = window.innerWidth + "px";

@@ -1,21 +1,19 @@
 import { useEffect, useState } from "react";
 import { FileText, Mail } from "lucide-react";
+import { useSiteSettings } from "@/hooks/use-content";
 
-const links = [
-  {
-    name: "Email",
-    href: "mailto:divyanshakya.dev@gmail.com",
-    icon: <Mail size={16} />,
-  },
-  {
-    name: "Resume",
-    href: "/resume/Divyansh_Shakya_Resume_Digital.pdf",
-    icon: <FileText size={16} />,
-  },
-];
+const DEFAULT_EMAIL = "divyanshakya.dev@gmail.com";
+const RESUME_HREF = "/resume/Divyansh_Shakya_Resume_Digital.pdf";
 
 export function RightPanel() {
   const [scrollPct, setScrollPct] = useState(0);
+  const { settings } = useSiteSettings();
+  const emailRaw = (settings.contact_email ?? "").trim();
+  const email = emailRaw.includes("@") ? emailRaw : DEFAULT_EMAIL;
+  const links = [
+    { name: "Email", href: `mailto:${email}`, icon: <Mail size={16} /> },
+    { name: "Resume", href: RESUME_HREF, icon: <FileText size={16} /> },
+  ];
 
   useEffect(() => {
     const onScroll = () => {

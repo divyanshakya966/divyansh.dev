@@ -1,71 +1,68 @@
 import { Github, Linkedin } from "lucide-react";
 import type { ReactNode } from "react";
+import { useSiteSettings } from "@/hooks/use-content";
+import { safeHref } from "@/lib/utils";
+
+const DEFAULTS: Record<string, string> = {
+  GitHub: "https://github.com/divyanshakya966",
+  LinkedIn: "https://www.linkedin.com/in/divyanshakya966",
+  Hashnode: "https://hashnode.com/@divyanshakya966",
+  TryHackMe: "https://tryhackme.com/p/divyanshakya966",
+  HackTheBox: "https://profile.hackthebox.com/profile/019c5d4a-8b27-718b-baa5-4597358c866b",
+  LeetCode: "https://leetcode.com/u/divyanshakya966",
+  Credly: "https://www.credly.com/users/divyansh-shakya.11716562",
+  X: "https://x.com/divyanshakya966",
+};
+
+const SETTING_KEYS: Record<string, string> = {
+  GitHub: "social_github",
+  LinkedIn: "social_linkedin",
+  Hashnode: "social_hashnode",
+  TryHackMe: "social_thm",
+  HackTheBox: "social_htb",
+  LeetCode: "social_leetcode",
+  Credly: "social_credly",
+  X: "social_x",
+};
 
 const links = [
-  {
-    name: "GitHub",
-    href: "https://github.com/divyanshakya966",
-    icon: <Github size={16} />,
-  },
-  {
-    name: "LinkedIn",
-    href: "https://www.linkedin.com/in/divyanshakya966",
-    icon: <Linkedin size={16} />,
-  },
-  {
-    name: "Hashnode",
-    href: "https://hashnode.com/@divyanshakya966",
-    icon: <HashnodeIcon />,
-  },
-  {
-    name: "TryHackMe",
-    href: "https://tryhackme.com/p/divyanshakya966",
-    icon: <TryHackMeIcon />,
-  },
-  {
-    name: "HackTheBox",
-    href: "https://profile.hackthebox.com/profile/019c5d4a-8b27-718b-baa5-4597358c866b",
-    icon: <HackTheBoxIcon />,
-  },
-  {
-    name: "LeetCode",
-    href: "https://leetcode.com/u/divyanshakya966",
-    icon: <LeetCodeIcon />,
-  },
-  {
-    name: "Credly",
-    href: "https://www.credly.com/users/divyansh-shakya.11716562",
-    icon: <CredlyIcon />,
-  },
-  {
-    name: "X",
-    href: "https://x.com/divyanshakya966",
-    icon: <XIcon />,
-  },
+  { name: "GitHub", icon: <Github size={16} /> },
+  { name: "LinkedIn", icon: <Linkedin size={16} /> },
+  { name: "Hashnode", icon: <HashnodeIcon /> },
+  { name: "TryHackMe", icon: <TryHackMeIcon /> },
+  { name: "HackTheBox", icon: <HackTheBoxIcon /> },
+  { name: "LeetCode", icon: <LeetCodeIcon /> },
+  { name: "Credly", icon: <CredlyIcon /> },
+  { name: "X", icon: <XIcon /> },
 ];
 
 export function SocialPanel() {
+  const { settings } = useSiteSettings();
   return (
     <aside
       aria-label="Social profiles"
       className="hidden xl:flex fixed left-[max(1rem,env(safe-area-inset-left))] top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 rounded-2xl glass p-1.5"
     >
-      {links.map((l) => (
-        <a
-          key={l.name}
-          href={l.href}
-          target={l.href.startsWith("mailto:") ? undefined : "_blank"}
-          rel={l.href.startsWith("mailto:") ? undefined : "noopener noreferrer"}
-          aria-label={l.name}
-          title={l.name}
-          className="group relative grid place-items-center h-9 w-9 rounded-lg bg-transparent text-muted-foreground hover:text-foreground hover:bg-foreground/6 transition"
-        >
-          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md glass px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-            {l.name}
-          </span>
-          {l.icon}
-        </a>
-      ))}
+      {links.map((l) => {
+        const href =
+          safeHref(settings[SETTING_KEYS[l.name]!] ?? "", DEFAULTS[l.name]!) || DEFAULTS[l.name]!;
+        return (
+          <a
+            key={l.name}
+            href={href}
+            target={href.startsWith("mailto:") ? undefined : "_blank"}
+            rel={href.startsWith("mailto:") ? undefined : "noopener noreferrer"}
+            aria-label={l.name}
+            title={l.name}
+            className="group relative grid place-items-center h-9 w-9 rounded-lg bg-transparent text-muted-foreground hover:text-foreground hover:bg-foreground/6 transition"
+          >
+            <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md glass px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+              {l.name}
+            </span>
+            {l.icon}
+          </a>
+        );
+      })}
     </aside>
   );
 }

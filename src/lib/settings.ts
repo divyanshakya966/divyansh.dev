@@ -105,6 +105,42 @@ export const SETTING_DEFS: SettingDef[] = [
     def: "https://www.linkedin.com/in/divyanshakya966",
   },
   {
+    key: "social_hashnode",
+    label: "Hashnode profile URL",
+    type: "text",
+    def: "https://hashnode.com/@divyanshakya966",
+  },
+  {
+    key: "social_thm",
+    label: "TryHackMe profile URL",
+    type: "text",
+    def: "https://tryhackme.com/p/divyanshakya966",
+  },
+  {
+    key: "social_htb",
+    label: "HackTheBox profile URL",
+    type: "text",
+    def: "https://profile.hackthebox.com/profile/019c5d4a-8b27-718b-baa5-4597358c866b",
+  },
+  {
+    key: "social_leetcode",
+    label: "LeetCode profile URL",
+    type: "text",
+    def: "https://leetcode.com/u/divyanshakya966",
+  },
+  {
+    key: "social_credly",
+    label: "Credly profile URL",
+    type: "text",
+    def: "https://www.credly.com/users/divyansh-shakya.11716562",
+  },
+  {
+    key: "social_x",
+    label: "X profile URL",
+    type: "text",
+    def: "https://x.com/divyanshakya966",
+  },
+  {
     key: "footer_repo",
     label: "Footer repository URL",
     type: "text",

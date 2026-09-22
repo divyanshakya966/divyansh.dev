@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const LINES = [
   { p: "$", t: "boot --user=divyansh" },
@@ -20,6 +20,10 @@ export function IntroBoot({
   const [typed, setTyped] = useState("");
   const [done, setDone] = useState(false);
   const [closing, setClosing] = useState(false);
+  // The finish timer outlives its scheduling effect run — track it so an
+  // early unmount can't fire setState/callbacks on a dead tree.
+  const finishTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(finishTimer.current), []);
 
   useEffect(() => {
     if (done) return;
@@ -32,14 +36,17 @@ export function IntroBoot({
         () => {
           setClosing(true);
           onCloseStart();
-          setTimeout(() => {
+          finishTimer.current = setTimeout(() => {
             setDone(true);
             onDone();
           }, 750);
         },
         reduced ? 0 : 200,
       );
-      return () => clearTimeout(t);
+      return () => {
+        clearTimeout(t);
+        clearTimeout(finishTimer.current);
+      };
     }
 
     if (reduced) {

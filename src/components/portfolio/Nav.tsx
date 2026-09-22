@@ -125,9 +125,6 @@ export function Nav() {
 
   useEffect(() => {
     const ids = links.map((l) => l.href.slice(1));
-    const sections = ids
-      .map((id) => document.getElementById(id))
-      .filter((s): s is HTMLElement => !!s);
     const io = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
@@ -140,10 +137,27 @@ export function Nav() {
       },
       { rootMargin: "-45% 0px -50% 0px", threshold: 0 },
     );
-    sections.forEach((s) => io.observe(s));
-    return () => io.disconnect();
-    // Re-observe when Research/Blogs links appear after publish or when
-    // visibility flags change.
+    // Sections mount late (content fetch, conditional Research/Blogs,
+    // admin visibility toggles) — same flaw class as the reveal cards had.
+    // Track late arrivals so scroll-spy never goes blind.
+    const observed = new Set<Element>();
+    const collect = () => {
+      ids.forEach((id) => {
+        const s = document.getElementById(id);
+        if (s && !observed.has(s)) {
+          observed.add(s);
+          io.observe(s);
+        }
+      });
+    };
+    collect();
+    const mo = new MutationObserver(collect);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      io.disconnect();
+      mo.disconnect();
+    };
+    // Re-collect when the link set changes (published/hidden sections).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dynamicLinks, hiddenSections]);
 

@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import { render, screen, within, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Nav } from "@/components/portfolio/Nav";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const LINKS = [
   ["#about", "About"],
@@ -68,5 +72,52 @@ describe("Nav", () => {
     const menu = within(document.getElementById("mobile-menu")!);
     await user.click(menu.getByRole("link", { name: "Projects" }));
     expect(btn).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("scroll-spies sections mounted after initial render (late content)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) => {
+        if (String(url).includes("/api/settings")) {
+          return { ok: true, json: async () => ({ settings: {} }) };
+        }
+        return { ok: true, json: async () => ({ items: [{ id: 1 }] }) };
+      }),
+    );
+    render(<Nav />);
+    // Research link appears once the content API reports published items.
+    const research = await screen.findByRole("link", { name: "Research" });
+    // The section itself mounts later (content fetch) — spy must pick it up.
+    await act(async () => {
+      const s = document.createElement("section");
+      s.id = "research";
+      document.body.appendChild(s);
+    });
+    const io = window.__ioInstances.at(-1)!;
+    const section = document.getElementById("research")!;
+    act(() => io.intersect(section));
+    await waitFor(() => {
+      expect(research.querySelector("span.absolute")).not.toBeNull();
+    });
+  });
+
+  it("hides links for sections turned off in settings", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) => {
+        if (String(url).includes("/api/settings")) {
+          return {
+            ok: true,
+            json: async () => ({ settings: { section_building_visible: "0" } }),
+          };
+        }
+        return { ok: true, json: async () => ({ items: [] }) };
+      }),
+    );
+    render(<Nav />);
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: "Building" })).toBeNull();
+    });
+    expect(screen.getByRole("link", { name: "Projects" })).toBeInTheDocument();
   });
 });
