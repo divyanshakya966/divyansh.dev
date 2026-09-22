@@ -17,6 +17,11 @@ Copy the `database_id` it prints into `wrangler.jsonc`:
   "database_id": "PASTE_REAL_ID_HERE", "migrations_dir": "migrations" }]
 ```
 
+> ⚠️ Keep `"binding"` as `"DB"` — the server reads `env.DB`. Newer wrangler
+> versions auto-insert `"binding": "portfolio_db"` (derived from the database
+> name) when creating the DB; rename it back to `"DB"`, commit, and push,
+> otherwise production reports "D1 is not bound".
+
 ## 2. Create tables (local + production)
 
 ```bash
@@ -24,20 +29,25 @@ npm run db:migrate:local    # local dev
 npm run db:migrate:remote   # production
 ```
 
-This applies `migrations/0001_init.sql`:
-`admin_users`, `admin_sessions`, `content_items`.
+This applies `migrations/0001_init.sql` (`admin_users`, `admin_sessions`,
+`content_items`) and `migrations/0002_meta_settings.sql` (`meta` column +
+`site_settings` table). Re-run both commands after pulling updates that add
+new migration files.
 
 ## 3. Create your admin user (hashed, never plaintext)
 
 ```bash
 npm run admin:create -- --username divyansh --apply-remote
 # local dev:  npm run admin:create -- --username divyansh --apply-local
+# machine-generated password (no typing): add --generate
+# bypass the hidden prompt:  ADMIN_PASSWORD='...' npm run admin:create -- --username divyansh --apply-remote
 ```
 
-The script prompts for a password (12+ chars, hidden), hashes it with
-PBKDF2-SHA256 (100k iterations — the Cloudflare Workers maximum, random 16-byte salt — same code as
+The script hashes the password with PBKDF2-SHA256 (100k iterations — the
+Cloudflare Workers maximum, random 16-byte salt — same code as
 `src/lib/admin-auth.ts`), and upserts it into D1. Without `--apply-*` it
-prints the SQL + `.dev.vars` fallback values instead.
+prints the SQL + `.dev.vars` fallback values instead. Wait for the
+`Done. Sign in at /admin.` line — anything else means it did not write.
 
 ## 4. Sign in
 
@@ -55,17 +65,17 @@ Open `/admin` → sign in. You get full control of the portfolio:
 
 ## How the public site behaves
 
-| Section | Visibility |
-|---|---|
+| Section                                                                                     | Visibility                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | About / Skills / Projects / Experience / Certifications / Achievements / Building / Contact | Visible while the section holds ≥1 visible item **and** its toggle is on (`Site settings`). Seeded with the current site content until D1 rows exist; hiding everything (or toggling off) hides the section. |
-| Research (`#research`), Blogs (`#blogs`) | **Hidden** until you publish ≥1 visible item from `/admin` (toggle must also be on). |
+| Research (`#research`), Blogs (`#blogs`)                                                    | **Hidden** until you publish ≥1 visible item from `/admin` (toggle must also be on).                                                                                                                         |
 
 Nav links follow automatically: Research/Blogs appear once published; links for
 toggled-off sections disappear.
 
 ## Field map (what each field does per kind)
 
-- **Common:** title*, subtitle, description, URL, image, tags (comma-separated),
+- **Common:** title\*, subtitle, description, URL, image, tags (comma-separated),
   sort order, visible flag.
 - **project:** subtitle = tag chip, URL = repo, tags = stack,
   meta `{"long": "dialog text", "demo": "live URL (optional)"}`.
@@ -85,9 +95,9 @@ Meta is a JSON object (max 4000 chars); the editor validates it before saving.
 - PBKDF2-SHA256, 100k iterations — the Cloudflare Workers maximum, per-user salt; constant-time compare.
 - Sessions: 32-byte opaque token, only `SHA-256(token)` stored; cookie is
   `httpOnly`, `Secure` (https), `SameSite=Lax`, 12h expiry.
-- Login rate limit: 5 attempts / 10 min per IP; generic error messages plus
-  dummy-PBKDF2 timing equalization (no user enumeration by message or timing);
-  CSRF origin check on login and all cookie-authed writes.
+- Login rate limit: 5 attempts / 10 min per IP (per edge isolate); generic
+  error messages plus dummy-PBKDF2 timing equalization (no user enumeration
+  by message or timing); CSRF origin check on login and all cookie-authed writes.
 - No public signup — admins are created only via the CLI script.
 - `/admin` is `noindex`, and `robots.txt` disallows `/admin` + `/api/admin/`.
 
@@ -124,6 +134,15 @@ Set up D1 before deploying — the fallback is local-only.
   seeds into D1 (409 once rows exist; 400 for seedless kinds like research/blog)
 - `GET|PUT /api/admin/settings`, `DELETE /api/admin/settings/:key` (reset to default)
 
-> After pulling this update, run migrations again (new `0002` migration adds
-> the `meta` column + `site_settings` table):
-> `npm run db:migrate:local` and `npm run db:migrate:remote`.
+## Troubleshooting
+
+| Symptom                                                | Cause → fix                                                                                                                                                                            |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Banner: "D1 is not bound"                              | `binding` isn't `"DB"` in the deployed `wrangler.jsonc`, or CI hasn't deployed the fix yet → check Deployments, fix name, push.                                                        |
+| Banner: "No admin user exists yet" (D1 bound)          | Remote DB empty → `npm run db:migrate:remote`, then `admin:create --apply-remote`.                                                                                                     |
+| "Invalid username or password" with the right password | (1) Throttled — wait 10 min. (2) Tested seconds after a reset — D1 reads can lag; wait 3–5 min. (3) Row never updated — compare `SELECT SUBSTR(password_hash,1,8)` before/after reset. |
+| "Too many attempts"                                    | Per-IP login throttle — wait 10 minutes, then try once.                                                                                                                                |
+| Amber "schema is outdated" in `/admin`                 | Migration 0002 missing → `npm run db:migrate:remote` (+ `:local`).                                                                                                                     |
+| `wrangler d1 list` shows `num_tables: 0`               | Migrations never applied to remote → step 2 with `--remote`.                                                                                                                           |
+| Edits don't show publicly                              | CDN caches content ~5 min (`s-maxage=300`) → wait or purge cache in the Cloudflare dashboard.                                                                                          |
+| Contact form 500 in production                         | `RESEND_API_KEY` (and sender) missing on the worker → `npx wrangler secret put …` or dashboard Variables.                                                                              |

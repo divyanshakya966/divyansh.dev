@@ -659,7 +659,8 @@ async function requireAdmin(request: Request, env: unknown): Promise<AdminUser |
 }
 
 function parseId(id: string): number | null {
-  // Seed rows (e.g. "seed-...") are read-only fallbacks — not editable.
+  // Content ids are positive integers; anything else is rejected so
+  // read-only seed placeholders (e.g. "seed-…") can never be edited.
   const n = Number(id);
   if (!Number.isInteger(n) || n <= 0) return null;
   return n;

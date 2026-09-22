@@ -39,6 +39,21 @@ function parseArgs() {
     else if (args[i] === "--apply-local") out.applyLocal = true;
     else if (args[i] === "--apply-remote") out.applyRemote = true;
     else if (args[i] === "--generate") out.generate = true;
+    else if (args[i] === "--help" || args[i] === "-h") {
+      console.log(`Usage:
+  npm run admin:create -- --username <name> [--apply-local|--apply-remote] [--generate]
+  ADMIN_PASSWORD='...' npm run admin:create -- --username <name> --apply-remote
+
+Options:
+  --username <name>  admin login (a-z 0-9 . _ -, 3-32 chars)
+  --apply-local      write to local D1 (needs migrate + database_id)
+  --apply-remote     write to production D1
+  --generate         print a strong random password instead of prompting
+  ADMIN_PASSWORD env bypasses the hidden prompt (byte-exact)
+
+Without --apply-*, prints SQL + .dev.vars values without writing anything.`);
+      process.exit(0);
+    }
   }
   return out;
 }
