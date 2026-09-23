@@ -23,11 +23,9 @@ CONTACT_RATE_LIMIT_MAX=5
 CONTACT_RATE_LIMIT_WINDOW_MS=600000
 
 # Optional — local admin fallback BEFORE D1 is set up (local dev only).
-# Production uses D1 `admin_users` (hashed password in the external DB).
-# Generate values with: npm run admin:create
+# Production uses D1 `admin_users`. Generate values with: npm run admin:create
 # Most reliable: export them when starting dev, e.g.
 #   ADMIN_USERNAME=divyansh ADMIN_PASSWORD_HASH=<hex> ADMIN_PASSWORD_SALT=<hex> npm run dev
-# (Some plugin setups also forward these from .dev.vars; exported env always works.)
 # ADMIN_USERNAME=
 # ADMIN_PASSWORD_HASH=
 # ADMIN_PASSWORD_SALT=

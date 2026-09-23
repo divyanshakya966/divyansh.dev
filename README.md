@@ -9,6 +9,10 @@ This project is intentionally opinionated: it leans into a dark, terminal-inspir
 - A personal portfolio experience centered on projects, skills, experience, and current work
 - A custom visual system with animated transitions, themed surfaces, and a tailored cursor treatment
 - A compact content structure designed to keep the presentation clear without exposing unnecessary implementation detail
+- A private admin area (`/admin`) where all portfolio sections, site settings,
+  and visibility are managed — backed by a Cloudflare D1 database
+- Data-driven sections (certifications, projects, experience, research, blogs…)
+  that render instantly from built-in seeds and stay in sync with admin edits
 
 ## Tech Stack
 
@@ -18,6 +22,8 @@ This project is intentionally opinionated: it leans into a dark, terminal-inspir
 - Vite
 - Tailwind CSS v4
 - Cloudflare Workers / Wrangler
+- Cloudflare D1 (portfolio content, site settings, admin data)
+- Resend (contact form delivery, admin verification email)
 - Self-hosted Inter + JetBrains Mono fonts via fontsource
 - PWA manifest and install icons
 - Radix UI (dialog) + Sonner (toasts)
@@ -43,6 +49,7 @@ flowchart LR
 	subgraph Experience[Portfolio Experience]
 		direction TB
 		Portfolio[src/components/portfolio/*]
+		Admin[src/routes/admin.tsx]
 		UI[src/components/ui/*]
 		Reveal[src/hooks/use-reveal.ts]
 		Cursor[src/components/portfolio/Cursor.tsx]
@@ -67,9 +74,11 @@ flowchart LR
 	subgraph Runtime[Runtime]
 		direction TB
 		Server[src/server.ts + src/start.ts + src/lib/error-page.ts]
-		Api[Api routes: robots.txt, sitemap.xml, POST /api/contact]
+		Api[Api routes: robots.txt, sitemap.xml, contact, content, settings, admin]
+		Database[(Cloudflare D1 + migrations/)]
 		Cloudflare[Cloudflare Workers / SSR]
 		Server --> Api
+		Server --> Database
 		Server --> Cloudflare
 	end
 
@@ -77,9 +86,10 @@ flowchart LR
 	Index --> Portfolio
 	Root --> Styles
 	Server --> Error
+	Admin --> Database
 ```
 
-The structure keeps the visible portfolio content separate from the shared shell, asset pipeline, and runtime wiring, which makes the project easier to evolve while preserving the public-facing experience.
+The structure keeps the visible portfolio content separate from the shared shell, asset pipeline, and runtime wiring, which makes the project easier to evolve while preserving the public-facing experience. Content lives in the database with built-in seed fallbacks; the admin area edits it without code changes. Operational setup for the admin side lives in `docs/ADMIN_SETUP.md`.
 
 ## Design Direction
 

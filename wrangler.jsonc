@@ -17,22 +17,16 @@
 		"CONTACT_RATE_LIMIT_MAX": "5",
 		"CONTACT_RATE_LIMIT_WINDOW_MS": "600000"
 	},
-	// Workers Logs: collect console output + per-invocation records so
-	// `wrangler tail` and the dashboard show the same logs locally and in
-	// production (auth errors, Resend failures, crypto issues).
+	// Workers Logs in dashboard + `wrangler tail`, matching local console output.
 	"observability": {
 		"logs": {
 			"enabled": true,
 			"invocation_logs": true
 		}
 	},
-	// External managed DB for admin auth + dynamic content (no connection
-	// strings — Workers talk to D1 over the `DB` binding).
-	// IMPORTANT: keep "binding" as "DB" — server.ts reads env.DB.
-	// `wrangler d1 create` auto-inserts "portfolio_db" here; rename it back.
-	// Setup: npx wrangler d1 create portfolio-db  -> paste database_id below
-	//        npx wrangler d1 migrations apply portfolio-db --local
-	//        npx wrangler d1 migrations apply portfolio-db --remote
+	// D1 over the `DB` binding (no connection strings).
+	// Keep "binding" as "DB" — server.ts reads env.DB (wrangler auto-inserts
+	// "portfolio_db" on `d1 create`; rename it back). See docs/ADMIN_SETUP.md.
 	"d1_databases": [
 		{
 			"binding": "DB",
