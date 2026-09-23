@@ -276,6 +276,11 @@ function AdminPage() {
     }
     setUser(null);
     setItems([]);
+    // Never carry session-scoped messages onto the signed-out login form:
+    // a stale "Verified…" notice would mislead (and reveal timing to the
+    // next viewer of this screen).
+    setError("");
+    setNotice("");
     setOtp({ verified: false, expiresAt: null });
     setOtpCode("");
     setOtpSent(false);
