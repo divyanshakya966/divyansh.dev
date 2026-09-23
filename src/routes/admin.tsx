@@ -146,6 +146,7 @@ function AdminPage() {
   const [changingPw, setChangingPw] = useState(false);
   const [importingSeeds, setImportingSeeds] = useState(false);
   const [importingFile, setImportingFile] = useState(false);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Site settings
@@ -416,7 +417,16 @@ function AdminPage() {
       setError("Seed items can't be deleted. Import them to D1 first.");
       return;
     }
-    if (!window.confirm(`Delete "${item.title}"?`)) return;
+    // Two-step inline confirm (no blocking native dialog): first click arms,
+    // second click within 4s deletes.
+    if (confirmingId !== String(item.id)) {
+      setConfirmingId(String(item.id));
+      window.setTimeout(() => {
+        setConfirmingId((cur) => (cur === String(item.id) ? null : cur));
+      }, 4000);
+      return;
+    }
+    setConfirmingId(null);
     setError("");
     try {
       await api(`/api/admin/items/${item.id}`, { method: "DELETE" });
@@ -1137,9 +1147,18 @@ function AdminPage() {
                         {!readOnly && (
                           <button
                             onClick={() => handleDelete(item)}
-                            className="rounded-md px-2 py-1 text-xs text-red-300 hover:bg-red-500/10"
+                            aria-label={
+                              confirmingId === String(item.id)
+                                ? `Confirm delete ${item.title}`
+                                : `Delete ${item.title}`
+                            }
+                            className={`rounded-md px-2 py-1 text-xs transition-colors ${
+                              confirmingId === String(item.id)
+                                ? "bg-red-500/20 text-red-200 hover:bg-red-500/30"
+                                : "text-red-300 hover:bg-red-500/10"
+                            }`}
                           >
-                            Delete
+                            {confirmingId === String(item.id) ? "Confirm?" : "Delete"}
                           </button>
                         )}
                       </div>
