@@ -89,6 +89,8 @@ in D1 (plaintext never stored), 5 wrong guesses lock the code, verify attempts
 are IP rate-limited, grants are opaque hashed tokens bound to your session and
 die with logout or password change. Requesting a code also emails you — an
 unexpected code email means someone has your password: change it immediately.
+Rotate secrets anytime with `npx wrangler secret put …` (takes effect instantly,
+no redeploy).
 Local `.dev.vars` fallback mode has no email channel, so it skips step-up
 (`status.stepUp` is false there); production with D1 always enforces it.
 

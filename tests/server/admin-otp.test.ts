@@ -54,6 +54,14 @@ describe("step-up OTP via Resend email", () => {
     expect(noMail.status).toBe(501);
 
     process.env.RESEND_API_KEY = "re_test";
+    process.env.ADMIN_EMAIL = "not-an-email";
+    const badEmail = await server.fetch(
+      req("/api/admin/otp/request", { method: "POST", headers: { cookie } }, "10.1.0.1"),
+      { DB: db },
+      {},
+    );
+    expect(badEmail.status).toBe(501);
+
     process.env.ADMIN_EMAIL = "owner@example.com";
     const sent = stubResend(true);
     const res = await server.fetch(

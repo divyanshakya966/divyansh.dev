@@ -215,6 +215,13 @@ export class FakeD1 {
       if (row) row.attempts = Number(row.attempts) + 1;
       return { success: true };
     }
+    if (sql.startsWith("DELETE FROM admin_otps WHERE user_id = ? AND (used = 1 OR expires_at")) {
+      const now = Number(p[1]);
+      this.otps = this.otps.filter(
+        (o) => !(o.user_id === p[0] && (Number(o.used) === 1 || Number(o.expires_at) < now)),
+      );
+      return { success: true };
+    }
     if (sql.startsWith("DELETE FROM admin_otps WHERE user_id")) {
       this.otps = this.otps.filter((o) => o.user_id !== p[0]);
       return { success: true };

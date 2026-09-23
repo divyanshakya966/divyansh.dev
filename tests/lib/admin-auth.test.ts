@@ -4,6 +4,8 @@ import {
   getSessionTokenFromCookie,
   hashPassword,
   isAllowedAdminOrigin,
+  isOtpCode,
+  newOtpCode,
   normalizeUsername,
   PBKDF2_ITERATIONS,
   timingSafeEqualHex,
@@ -65,5 +67,18 @@ describe("admin-auth", () => {
       headers: { origin: "https://evil.com" },
     });
     expect(isAllowedAdminOrigin(cross)).toBe(false);
+  });
+
+  it("generates uniform 6-digit codes", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      const code = newOtpCode();
+      expect(isOtpCode(code)).toBe(true);
+      seen.add(code);
+    }
+    // CSPRNG output must vary across samples.
+    expect(seen.size).toBeGreaterThan(150);
+    expect(isOtpCode("12345")).toBe(false);
+    expect(isOtpCode("abcdef")).toBe(false);
   });
 });

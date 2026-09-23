@@ -939,12 +939,22 @@ async function handleOtpRequest(request: Request, env: unknown): Promise<Respons
         501,
       );
     }
+    const alertEmail = getAlertEmail(env);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alertEmail)) {
+      return jsonResponse({ error: "Alert email is misconfigured. Set a valid ADMIN_EMAIL." }, 501);
+    }
 
-    // Invalidate any previous live code before issuing a new one.
+    // Invalidate any previous live code before issuing a new one, and drop
+    // long-dead rows so the table stays tiny.
     await db
       .prepare("UPDATE admin_otps SET used = 1 WHERE user_id = ? AND used = 0")
       .bind(user.id)
       .run();
+    await db
+      .prepare("DELETE FROM admin_otps WHERE user_id = ? AND (used = 1 OR expires_at < ?)")
+      .bind(user.id, now)
+      .run()
+      .catch(() => {});
 
     const code = newOtpCode();
     const codeHash = await sha256Hex(code);
@@ -955,7 +965,7 @@ async function handleOtpRequest(request: Request, env: unknown): Promise<Respons
       .bind(user.id, codeHash, now + OTP_TTL_MS, now)
       .run();
 
-    const sent = await sendOtpEmail(env, getAlertEmail(env), code);
+    const sent = await sendOtpEmail(env, alertEmail, code);
     if (!sent) {
       await db
         .prepare("UPDATE admin_otps SET used = 1 WHERE user_id = ? AND code_hash = ?")

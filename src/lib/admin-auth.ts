@@ -176,11 +176,18 @@ export function buildClearedGrantCookie(secure: boolean): string {
   return `${GRANT_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
 }
 
-/** 6-digit numeric code from a CSPRNG (leading zeros preserved). */
+/**
+ * 6-digit numeric code from a CSPRNG (leading zeros preserved).
+ * Rejection sampling keeps the distribution uniform: 2^32 is not a multiple
+ * of 10^6, so a bare modulo would favor low codes.
+ */
 export function newOtpCode(): string {
-  const bytes = getCrypto().getRandomValues(new Uint8Array(4));
-  const n = ((bytes[0]! << 24) | (bytes[1]! << 16) | (bytes[2]! << 8) | bytes[3]!) >>> 0;
-  return String(n % 1_000_000).padStart(6, "0");
+  const crypto = getCrypto();
+  for (;;) {
+    const bytes = crypto.getRandomValues(new Uint8Array(4));
+    const n = ((bytes[0]! << 24) | (bytes[1]! << 16) | (bytes[2]! << 8) | bytes[3]!) >>> 0;
+    if (n < 4294000000) return String(n % 1_000_000).padStart(6, "0");
+  }
 }
 
 export function isOtpCode(value: unknown): value is string {
