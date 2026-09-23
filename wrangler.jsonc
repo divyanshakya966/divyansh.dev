@@ -17,6 +17,15 @@
 		"CONTACT_RATE_LIMIT_MAX": "5",
 		"CONTACT_RATE_LIMIT_WINDOW_MS": "600000"
 	},
+	// Workers Logs: collect console output + per-invocation records so
+	// `wrangler tail` and the dashboard show the same logs locally and in
+	// production (auth errors, Resend failures, crypto issues).
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true
+		}
+	},
 	// External managed DB for admin auth + dynamic content (no connection
 	// strings — Workers talk to D1 over the `DB` binding).
 	// IMPORTANT: keep "binding" as "DB" — server.ts reads env.DB.
