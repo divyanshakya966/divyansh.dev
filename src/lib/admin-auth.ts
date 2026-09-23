@@ -1,14 +1,20 @@
 /**
  * Strict admin auth built for Cloudflare Workers (WebCrypto only, no Node deps).
  *
- * - Passwords: PBKDF2-SHA256, 120k iterations, 16-byte salt, 32-byte hash.
+ * - Passwords: PBKDF2-SHA256, 100k iterations (Workers maximum), 16-byte
+ *   salt, 32-byte hash.
  * - Sessions: 32-byte opaque token, only SHA-256(token) stored in D1.
  *   Cookie: `admin_session`, httpOnly, Secure (prod), SameSite=Lax, 12h expiry.
+ * - Step-up grants: after an emailed one-time code verifies, a second
+ *   short-lived grant (`admin_otp` cookie, 10 min) is required on top of the
+ *   session for every mutating admin call.
  * - Login rate limiting + generic error messages (no user enumeration).
  */
 
 export const SESSION_COOKIE = "admin_session";
 export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+export const GRANT_COOKIE = "admin_otp";
+export const GRANT_TTL_MS = 10 * 60 * 1000;
 // Cloudflare Workers rejects PBKDF2 iteration counts above 100000
 // (NotSupportedError), while Node allows more. Stay at the cap so hashes
 // created anywhere verify everywhere. Do NOT raise without a runtime check.
@@ -138,6 +144,47 @@ export function buildSessionCookie(token: string, secure: boolean): string {
 
 export function buildClearedSessionCookie(secure: boolean): string {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
+}
+
+function getCookieToken(request: Request, name: string): string | null {
+  const header = request.headers.get("cookie");
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() !== name) continue;
+    const value = part
+      .slice(idx + 1)
+      .trim()
+      .replace(/^"|"$/g, "");
+    if (/^[0-9a-f]{64}$/i.test(value)) return value.toLowerCase();
+    return null;
+  }
+  return null;
+}
+
+export function getGrantTokenFromCookie(request: Request): string | null {
+  return getCookieToken(request, GRANT_COOKIE);
+}
+
+export function buildGrantCookie(token: string, secure: boolean): string {
+  const maxAge = Math.floor(GRANT_TTL_MS / 1000);
+  return `${GRANT_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
+}
+
+export function buildClearedGrantCookie(secure: boolean): string {
+  return `${GRANT_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
+}
+
+/** 6-digit numeric code from a CSPRNG (leading zeros preserved). */
+export function newOtpCode(): string {
+  const bytes = getCrypto().getRandomValues(new Uint8Array(4));
+  const n = ((bytes[0]! << 24) | (bytes[1]! << 16) | (bytes[2]! << 8) | bytes[3]!) >>> 0;
+  return String(n % 1_000_000).padStart(6, "0");
+}
+
+export function isOtpCode(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9]{6}$/.test(value);
 }
 
 export function isSecureRequest(request: Request): boolean {

@@ -62,6 +62,35 @@ Open `/admin` → sign in. You get full control of the portfolio:
 - **Site settings:** hero roles/tagline/location, about intro, contact email +
   socials + status line, footer repo link, and per-section **on/off toggles**.
 - **Change password** (other sessions are signed out).
+- **Two-step verification:** every save, reorder, import, settings edit and
+  password change additionally requires a one-time 6-digit code emailed to
+  you (see below). Reading/listing never needs it.
+
+## Two-step verification (step-up codes via Resend)
+
+Even with your password, nobody can change anything without a code from your
+inbox. How it works:
+
+1. Sign in at `/admin` → panel **Two-step verification** → **Email me a code**.
+2. Enter the 6-digit code (expires in 10 min) → **Verify**.
+3. Saves, password change and settings work for the next **10 minutes**;
+   **Lock changes** ends it early. Logging out ends it too.
+
+Setup:
+
+```bash
+npx wrangler secret put RESEND_API_KEY   # same key as the contact form
+npx wrangler secret put ADMIN_EMAIL      # where codes go (falls back to CONTACT_TO_EMAIL)
+npm run db:migrate:remote                # adds admin_otps + admin_grants (migration 0003)
+```
+
+Protections: max 5 codes/hour + 60 s between sends, codes are SHA-256 hashed
+in D1 (plaintext never stored), 5 wrong guesses lock the code, verify attempts
+are IP rate-limited, grants are opaque hashed tokens bound to your session and
+die with logout or password change. Requesting a code also emails you — an
+unexpected code email means someone has your password: change it immediately.
+Local `.dev.vars` fallback mode has no email channel, so it skips step-up
+(`status.stepUp` is false there); production with D1 always enforces it.
 
 ## How the public site behaves
 
@@ -136,6 +165,8 @@ Set up D1 before deploying — the fallback is local-only.
 - `GET /api/admin/status` — `{ db, hasAdmin, metaReady }` (setup + schema probe;
   if `metaReady` is false, apply migration 0002).
 - `POST /api/admin/login|logout`, `GET /api/admin/me`
+- `POST /api/admin/otp/request`, `POST /api/admin/otp/verify` `{ code }`,
+  `GET /api/admin/otp/status`, `POST /api/admin/otp/revoke`
 - `GET|POST /api/admin/items?kind=all|…`, `PUT|DELETE /api/admin/items/:id`
 - `POST /api/admin/reorder` `{ kind, ids }`, `PUT /api/admin/password`
 - `POST /api/admin/seed-import` `{ kind }` — one-time import of that kind's
@@ -149,6 +180,8 @@ Set up D1 before deploying — the fallback is local-only.
 | Banner: "D1 is not bound"                              | `binding` isn't `"DB"` in the deployed `wrangler.jsonc`, or CI hasn't deployed the fix yet → check Deployments, fix name, push.                                                        |
 | Banner: "No admin user exists yet" (D1 bound)          | Remote DB empty → `npm run db:migrate:remote`, then `admin:create --apply-remote`.                                                                                                     |
 | "Invalid username or password" with the right password | (1) Throttled — wait 10 min. (2) Tested seconds after a reset — D1 reads can lag; wait 3–5 min. (3) Row never updated — compare `SELECT SUBSTR(password_hash,1,8)` before/after reset. |
+| Save rejected: "Step-up verification required"         | Verify the emailed code in the Two-step panel first (grants last 10 min). If no email arrives: check `ADMIN_EMAIL`/`RESEND_API_KEY` secrets and spam.                                  |
+| "Code locked… request a new one"                       | 5 wrong guesses used up — request a fresh code (previous one is dead).                                                                                                                 |
 | "Too many attempts"                                    | Per-IP login throttle — wait 10 minutes, then try once.                                                                                                                                |
 | Amber "schema is outdated" in `/admin`                 | Migration 0002 missing → `npm run db:migrate:remote` (+ `:local`).                                                                                                                     |
 | `wrangler d1 list` shows `num_tables: 0`               | Migrations never applied to remote → step 2 with `--remote`.                                                                                                                           |

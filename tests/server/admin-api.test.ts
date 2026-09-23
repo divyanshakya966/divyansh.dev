@@ -1,220 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { hashPassword } from "@/lib/admin-auth";
 import server from "@/server";
 
-/* Minimal in-memory D1 stand-in implementing just the surface server.ts uses. */
-
-type Row = Record<string, unknown>;
-
-class FakeStatement {
-  constructor(
-    private db: FakeD1,
-    private sql: string,
-    private params: unknown[] = [],
-  ) {}
-  bind(...params: unknown[]) {
-    return new FakeStatement(this.db, this.sql, params);
-  }
-  async first<T = Row>(): Promise<T | null> {
-    return this.db.handleFirst(this.sql, this.params) as T | null;
-  }
-  async all<T = Row>(): Promise<{ results: T[]; success: boolean }> {
-    return { results: this.db.handleAll(this.sql, this.params) as T[], success: true };
-  }
-  async run(): Promise<{ success: boolean; meta?: { last_row_id?: number } }> {
-    return this.db.handleRun(this.sql, this.params);
-  }
-}
-
-class FakeD1 {
-  users: Row[] = [];
-  sessions: Row[] = [];
-  items: Row[] = [];
-  settings: Row[] = [];
-  seq = 1;
-  useq = 1;
-
-  prepare(sql: string) {
-    return new FakeStatement(this, sql);
-  }
-  async batch(stmts: FakeStatement[]) {
-    for (const s of stmts) await s.run();
-    return [];
-  }
-
-  handleFirst(sql: string, p: unknown[]): Row | null {
-    if (sql.includes("FROM admin_users WHERE username")) {
-      return (this.users.find((u) => u.username === p[0]) as Row) ?? null;
-    }
-    if (sql.includes("COUNT(*) as count FROM admin_users")) {
-      return { count: this.users.length };
-    }
-    if (sql.includes("FROM admin_sessions WHERE token_hash")) {
-      return (this.sessions.find((s) => s.token_hash === p[0]) as Row) ?? null;
-    }
-    if (sql.includes("FROM admin_users WHERE id")) {
-      return (this.users.find((u) => u.id === p[0]) as Row) ?? null;
-    }
-    if (sql.includes("COUNT(*) as count FROM content_items WHERE kind")) {
-      return { count: this.items.filter((i) => i.kind === p[0]).length };
-    }
-    return null;
-  }
-
-  handleAll(sql: string, p: unknown[]): Row[] {
-    if (sql.includes("FROM site_settings")) {
-      return [...this.settings];
-    }
-    const visible = sql.includes("is_visible = 1");
-    const byKind = sql.includes("WHERE kind = ?");
-    let rows = [...this.items];
-    if (byKind) rows = rows.filter((i) => i.kind === p[0]);
-    if (visible) rows = rows.filter((i) => Number(i.is_visible) === 1);
-    rows.sort((a, b) => Number(a.sort_order) - Number(b.sort_order) || Number(a.id) - Number(b.id));
-    return rows;
-  }
-
-  handleRun(sql: string, p: unknown[]): { success: boolean; meta?: { last_row_id?: number } } {
-    if (sql.startsWith("INSERT INTO admin_sessions")) {
-      this.sessions.push({ token_hash: p[0], user_id: p[1], expires_at: p[2], created_at: p[3] });
-      return { success: true };
-    }
-    if (sql.startsWith("DELETE FROM admin_sessions WHERE token_hash")) {
-      this.sessions = this.sessions.filter((s) => s.token_hash !== p[0]);
-      return { success: true };
-    }
-    if (sql.startsWith("DELETE FROM admin_sessions WHERE expires_at")) {
-      this.sessions = this.sessions.filter((s) => Number(s.expires_at) >= Number(p[0]));
-      return { success: true };
-    }
-    if (sql.startsWith("DELETE FROM admin_sessions WHERE user_id")) {
-      this.sessions = this.sessions.filter((s) => !(s.user_id === p[0] && s.token_hash !== p[1]));
-      return { success: true };
-    }
-    if (sql.startsWith("UPDATE admin_users SET password_hash")) {
-      const u = this.users.find((x) => x.id === p[2]);
-      if (u) {
-        u.password_hash = p[0];
-        u.salt = p[1];
-      }
-      return { success: true };
-    }
-    if (sql.startsWith("INSERT INTO content_items")) {
-      const id = this.seq++;
-      this.items.push({
-        id,
-        kind: p[0],
-        title: p[1],
-        subtitle: p[2],
-        description: p[3],
-        url: p[4],
-        image: p[5],
-        tags: p[6],
-        meta: p[7],
-        sort_order: p[8],
-        is_visible: p[9],
-        created_at: p[10],
-        updated_at: p[11],
-      });
-      return { success: true, meta: { last_row_id: id } };
-    }
-    if (sql.startsWith("UPDATE content_items SET kind")) {
-      const row = this.items.find((i) => i.id === p[11]);
-      if (row) {
-        row.kind = p[0];
-        row.title = p[1];
-        row.subtitle = p[2];
-        row.description = p[3];
-        row.url = p[4];
-        row.image = p[5];
-        row.tags = p[6];
-        row.meta = p[7];
-        row.sort_order = p[8];
-        row.is_visible = p[9];
-        row.updated_at = p[10];
-      }
-      return { success: true };
-    }
-    if (sql.startsWith("UPDATE content_items SET sort_order")) {
-      const row = this.items.find((i) => i.id === p[2] && i.kind === p[3]);
-      if (row) {
-        row.sort_order = p[0];
-        row.updated_at = p[1];
-      }
-      return { success: true };
-    }
-    if (sql.startsWith("DELETE FROM content_items WHERE id")) {
-      this.items = this.items.filter((i) => i.id !== p[0]);
-      return { success: true };
-    }
-    if (sql.startsWith("INSERT INTO site_settings")) {
-      const existing = this.settings.find((s) => s.key === p[0]);
-      if (existing) {
-        existing.value = p[1];
-        existing.updated_at = p[2];
-      } else {
-        this.settings.push({ key: p[0], value: p[1], updated_at: p[2] });
-      }
-      return { success: true };
-    }
-    if (sql.startsWith("DELETE FROM site_settings WHERE key")) {
-      this.settings = this.settings.filter((s) => s.key !== p[0]);
-      return { success: true };
-    }
-    throw new Error("Unhandled SQL in fake: " + sql);
-  }
-}
-
-function req(path: string, init?: RequestInit, ip = "10.0.0.1"): Request {
-  return new Request(`http://localhost${path}`, {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      "cf-connecting-ip": ip,
-      ...(init?.headers ?? {}),
-    },
-  });
-}
-
-async function seedAdmin(db: FakeD1, username: string, password: string) {
-  const { hash, salt } = await hashPassword(password);
-  const id = db.useq++;
-  db.users.push({ id, username, password_hash: hash, salt, created_at: Date.now() });
-  return { id, username, password };
-}
-
-async function login(db: FakeD1, username: string, password: string, ip = "10.0.0.1") {
-  return server.fetch(
-    req("/api/admin/login", { method: "POST", body: JSON.stringify({ username, password }) }, ip),
-    { DB: db },
-    {},
-  );
-}
-
-function cookieFrom(res: Response): string {
-  const setCookie = res.headers.get("set-cookie") ?? "";
-  return setCookie.split(";")[0] ?? "";
-}
-
-async function apiImportSeed(
-  db: FakeD1,
-  auth: { cookie: string },
-  ip: string,
-  kind: string,
-  expectedStatus = 201,
-) {
-  const res = await server.fetch(
-    req(
-      "/api/admin/seed-import",
-      { method: "POST", body: JSON.stringify({ kind }), headers: auth },
-      ip,
-    ),
-    { DB: db },
-    {},
-  );
-  expect(res.status).toBe(expectedStatus);
-  return res;
-}
+import { FakeD1, apiImportSeed, authedCookies, cookieFrom, login, req, seedAdmin } from "./fake-d1";
 
 beforeEach(() => {
   delete process.env.ADMIN_USERNAME;
@@ -225,7 +12,12 @@ beforeEach(() => {
 describe("admin API without DB (local fallback)", () => {
   it("reports status and serves seed certifications", async () => {
     const status = await server.fetch(req("/api/admin/status"), {}, {});
-    expect(await status.json()).toEqual({ db: false, hasAdmin: false, metaReady: true });
+    expect(await status.json()).toEqual({
+      db: false,
+      hasAdmin: false,
+      metaReady: true,
+      stepUp: false,
+    });
 
     const res = await server.fetch(req("/api/content?kind=certification"), {}, {});
     const data = (await res.json()) as { items: { title: string; url: string }[] };
@@ -324,6 +116,21 @@ describe("admin API with D1", () => {
     const anon = await server.fetch(req("/api/admin/items?kind=all"), { DB: db }, {});
     expect(anon.status).toBe(401);
 
+    // Session alone is not enough for mutations — step-up grant required.
+    const noGrant = await server.fetch(
+      req(
+        "/api/admin/items",
+        { method: "POST", body: JSON.stringify({ kind: "blog", title: "x" }), headers: auth },
+        "10.0.2.1",
+      ),
+      { DB: db },
+      {},
+    );
+    expect(noGrant.status).toBe(403);
+    expect(((await noGrant.json()) as { code: string }).code).toBe("OTP_REQUIRED");
+
+    const granted = { cookie: await authedCookies(db, cookie) };
+
     const payload = {
       kind: "blog",
       title: "First post",
@@ -337,7 +144,7 @@ describe("admin API with D1", () => {
     const created = await server.fetch(
       req(
         "/api/admin/items",
-        { method: "POST", body: JSON.stringify(payload), headers: auth },
+        { method: "POST", body: JSON.stringify(payload), headers: granted },
         "10.0.2.1",
       ),
       { DB: db },
@@ -361,7 +168,7 @@ describe("admin API with D1", () => {
         {
           method: "PUT",
           body: JSON.stringify({ ...payload, title: "Renamed", is_visible: false }),
-          headers: auth,
+          headers: granted,
         },
         "10.0.2.1",
       ),
@@ -380,7 +187,11 @@ describe("admin API with D1", () => {
       await server.fetch(
         req(
           "/api/admin/items",
-          { method: "POST", body: JSON.stringify({ ...payload, title: "Second" }), headers: auth },
+          {
+            method: "POST",
+            body: JSON.stringify({ ...payload, title: "Second" }),
+            headers: granted,
+          },
           "10.0.2.1",
         ),
         { DB: db },
@@ -394,7 +205,7 @@ describe("admin API with D1", () => {
         {
           method: "POST",
           body: JSON.stringify({ kind: "blog", ids: [second.id, id] }),
-          headers: auth,
+          headers: granted,
         },
         "10.0.2.1",
       ),
@@ -404,7 +215,7 @@ describe("admin API with D1", () => {
     expect(reorder.status).toBe(200);
 
     const del = await server.fetch(
-      req(`/api/admin/items/${id}`, { method: "DELETE", headers: auth }, "10.0.2.1"),
+      req(`/api/admin/items/${id}`, { method: "DELETE", headers: granted }, "10.0.2.1"),
       { DB: db },
       {},
     );
@@ -415,7 +226,7 @@ describe("admin API with D1", () => {
     const db = new FakeD1();
     await seedAdmin(db, "divyansh", "correct-horse-battery-99");
     const cookie = cookieFrom(await login(db, "divyansh", "correct-horse-battery-99", "10.0.3.1"));
-    const auth = { cookie };
+    const auth = { cookie: await authedCookies(db, cookie) };
 
     // Fresh D1: public falls back to the 2 real seeds.
     const before = (await (
@@ -484,6 +295,7 @@ describe("admin API with D1", () => {
     await seedAdmin(db, "divyansh", "correct-horse-battery-99");
     const c1 = cookieFrom(await login(db, "divyansh", "correct-horse-battery-99", "10.0.4.1"));
     const c2 = cookieFrom(await login(db, "divyansh", "correct-horse-battery-99", "10.0.4.2"));
+    const g1 = await authedCookies(db, c1);
 
     const weak = await server.fetch(
       req(
@@ -494,7 +306,7 @@ describe("admin API with D1", () => {
             currentPassword: "correct-horse-battery-99",
             newPassword: "short",
           }),
-          headers: { cookie: c1 },
+          headers: { cookie: g1 },
         },
         "10.0.4.1",
       ),
@@ -512,7 +324,7 @@ describe("admin API with D1", () => {
             currentPassword: "nope-nope-nope-nope",
             newPassword: "new-long-password-456",
           }),
-          headers: { cookie: c1 },
+          headers: { cookie: g1 },
         },
         "10.0.4.1",
       ),
@@ -530,7 +342,7 @@ describe("admin API with D1", () => {
             currentPassword: "correct-horse-battery-99",
             newPassword: "new-long-password-456",
           }),
-          headers: { cookie: c1 },
+          headers: { cookie: g1 },
         },
         "10.0.4.1",
       ),
@@ -560,21 +372,37 @@ describe("admin API with D1", () => {
     ).toBe(401);
     expect((await login(db, "divyansh", "correct-horse-battery-99", "10.0.4.3")).status).toBe(401);
     expect((await login(db, "divyansh", "new-long-password-456", "10.0.4.4")).status).toBe(200);
+
+    // The pre-change step-up grant died with the password change.
+    const staleGrant = await server.fetch(
+      req(
+        "/api/admin/items",
+        {
+          method: "POST",
+          body: JSON.stringify({ kind: "blog", title: "x" }),
+          headers: { cookie: g1 },
+        },
+        "10.0.4.1",
+      ),
+      { DB: db },
+      {},
+    );
+    expect(staleGrant.status).toBe(403);
   });
 
   it("reports schema readiness once D1 is bound", async () => {
     const db = new FakeD1();
     const status = (await (
       await server.fetch(req("/api/admin/status"), { DB: db }, {})
-    ).json()) as { db: boolean; hasAdmin: boolean; metaReady: boolean };
-    expect(status).toEqual({ db: true, hasAdmin: false, metaReady: true });
+    ).json()) as { db: boolean; hasAdmin: boolean; metaReady: boolean; stepUp: boolean };
+    expect(status).toEqual({ db: true, hasAdmin: false, metaReady: true, stepUp: true });
   });
 
   it("rejects invalid item payloads and seed-id edits", async () => {
     const db = new FakeD1();
     await seedAdmin(db, "divyansh", "correct-horse-battery-99");
     const cookie = cookieFrom(await login(db, "divyansh", "correct-horse-battery-99", "10.0.5.1"));
-    const auth = { cookie };
+    const auth = { cookie: await authedCookies(db, cookie) };
 
     const badKind = await server.fetch(
       req(
@@ -629,7 +457,7 @@ describe("hardening: body caps, encoding guards, security headers", () => {
         {
           method: "POST",
           body: JSON.stringify({ kind: "blog", title: "t", description: big }),
-          headers: { cookie },
+          headers: { cookie: await authedCookies(db, cookie) },
         },
         "10.0.7.1",
       ),
@@ -674,7 +502,7 @@ describe("full-portfolio control: projects, settings, generalized seeds", () => 
     const db = new FakeD1();
     await seedAdmin(db, "divyansh", "correct-horse-battery-99");
     const cookie = cookieFrom(await login(db, "divyansh", "correct-horse-battery-99", ipBase));
-    return { db, auth: { cookie }, ipBase };
+    return { db, auth: { cookie: await authedCookies(db, cookie) }, ipBase };
   }
 
   it("serves seed projects/experience publicly until D1 rows exist", async () => {

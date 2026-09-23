@@ -13,6 +13,11 @@ RESEND_FROM_EMAIL=
 # Optional — where contact messages are delivered.
 CONTACT_TO_EMAIL=
 
+# Recommended — where admin step-up verification codes are emailed.
+# Falls back to CONTACT_TO_EMAIL. Set as a production secret too:
+#   npx wrangler secret put ADMIN_EMAIL
+# ADMIN_EMAIL=
+
 # Optional — rate limiting (defaults match wrangler.jsonc: 5 requests / 10 min).
 CONTACT_RATE_LIMIT_MAX=5
 CONTACT_RATE_LIMIT_WINDOW_MS=600000

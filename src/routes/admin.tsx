@@ -10,7 +10,7 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type Status = { db: boolean; hasAdmin: boolean; metaReady: boolean };
+type Status = { db: boolean; hasAdmin: boolean; metaReady: boolean; stepUp: boolean };
 type Tab = ContentKind | "settings";
 
 const TABS: { kind: Tab; label: string; hint: string }[] = [
@@ -89,16 +89,22 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     // ignore
   }
   if (!res.ok) {
-    const msg =
-      data &&
-      typeof data === "object" &&
-      "error" in data &&
-      typeof (data as { error: unknown }).error === "string"
-        ? (data as { error: string }).error
-        : `Request failed (${res.status})`;
-    throw new Error(msg);
+    const err =
+      data && typeof data === "object" && "error" in data
+        ? (data as { error?: unknown; code?: unknown })
+        : {};
+    const msg = typeof err.error === "string" ? err.error : `Request failed (${res.status})`;
+    const error = new Error(msg) as Error & { code?: string };
+    if (typeof err.code === "string") error.code = err.code;
+    throw error;
   }
   return data as T;
+}
+
+function isOtpRequired(error: unknown): boolean {
+  return (
+    !!error && typeof error === "object" && (error as { code?: unknown }).code === "OTP_REQUIRED"
+  );
 }
 
 function downloadJson(filename: string, value: unknown) {
@@ -148,6 +154,16 @@ function AdminPage() {
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // Step-up verification (emailed one-time code, required for all saves)
+  const [otp, setOtp] = useState<{ verified: boolean; expiresAt: number | null }>({
+    verified: false,
+    expiresAt: null,
+  });
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [requestingOtp, setRequestingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+
   const refreshStatus = useCallback(async () => {
     try {
       const s = await api<Status>("/api/admin/status");
@@ -195,6 +211,17 @@ function AdminPage() {
     }
   }, []);
 
+  const refreshOtp = useCallback(async () => {
+    try {
+      const data = await api<{ verified: boolean; expiresAt: number | null }>(
+        "/api/admin/otp/status",
+      );
+      setOtp({ verified: data.verified === true, expiresAt: data.expiresAt ?? null });
+    } catch {
+      setOtp({ verified: false, expiresAt: null });
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       await refreshStatus();
@@ -202,10 +229,11 @@ function AdminPage() {
       if (ok) {
         await refreshItems();
         await refreshSettings();
+        await refreshOtp();
       }
       setChecking(false);
     })();
-  }, [refreshMe, refreshItems, refreshSettings, refreshStatus]);
+  }, [refreshMe, refreshItems, refreshOtp, refreshSettings, refreshStatus]);
 
   const isKindTab = tab !== "settings";
   const activeKind = isKindTab ? (tab as ContentKind) : null;
@@ -231,7 +259,8 @@ function AdminPage() {
       setPassword("");
       await refreshItems();
       await refreshSettings();
-      setNotice(`Welcome back, ${data.user.username}.`);
+      await refreshOtp();
+      setNotice(`Welcome back, ${data.user.username}. Verify the emailed code to make changes.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Login failed.");
     } finally {
@@ -247,6 +276,65 @@ function AdminPage() {
     }
     setUser(null);
     setItems([]);
+    setOtp({ verified: false, expiresAt: null });
+    setOtpCode("");
+    setOtpSent(false);
+  }
+
+  function noteOtpRequired() {
+    setError(
+      "Step-up verification required — verify the emailed code below, then retry your save.",
+    );
+  }
+
+  function fail(e: unknown, fallback: string) {
+    if (isOtpRequired(e)) noteOtpRequired();
+    else setError(e instanceof Error ? e.message : fallback);
+  }
+
+  async function handleRequestOtp() {
+    setRequestingOtp(true);
+    setError("");
+    setNotice("");
+    try {
+      const data = await api<{ expiresIn: number }>("/api/admin/otp/request", { method: "POST" });
+      setOtpSent(true);
+      setNotice(`Code sent to your email (expires in ${Math.floor(data.expiresIn / 60)} min).`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to send code.");
+    } finally {
+      setRequestingOtp(false);
+    }
+  }
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setVerifyingOtp(true);
+    setError("");
+    setNotice("");
+    try {
+      const data = await api<{ expiresAt: number }>("/api/admin/otp/verify", {
+        method: "POST",
+        body: JSON.stringify({ code: otpCode.trim() }),
+      });
+      setOtp({ verified: true, expiresAt: data.expiresAt });
+      setOtpCode("");
+      setNotice("Verified — you can now save changes for the next 10 minutes.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Verification failed.");
+    } finally {
+      setVerifyingOtp(false);
+    }
+  }
+
+  async function handleRevokeOtp() {
+    try {
+      await api("/api/admin/otp/revoke", { method: "POST" });
+    } catch {
+      // ignore
+    }
+    setOtp({ verified: false, expiresAt: null });
+    setOtpCode("");
   }
 
   function openAdd() {
@@ -312,7 +400,7 @@ function AdminPage() {
       setFormOpen(false);
       await refreshItems();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed.");
+      fail(e, "Save failed.");
     } finally {
       setSaving(false);
     }
@@ -330,7 +418,7 @@ function AdminPage() {
       setNotice("Item deleted.");
       await refreshItems();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed.");
+      fail(e, "Delete failed.");
     }
   }
 
@@ -357,7 +445,7 @@ function AdminPage() {
       });
       await refreshItems();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Toggle failed.");
+      fail(e, "Toggle failed.");
     }
   }
 
@@ -408,7 +496,7 @@ function AdminPage() {
       }
       await refreshItems();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Reorder failed.");
+      fail(e, "Reorder failed.");
       await refreshItems();
     }
   }
@@ -427,7 +515,7 @@ function AdminPage() {
       setCurrentPassword("");
       setNewPassword("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Password change failed.");
+      fail(e, "Password change failed.");
     } finally {
       setChangingPw(false);
     }
@@ -446,7 +534,7 @@ function AdminPage() {
       setNotice(`Imported ${data.imported} seed(s) into D1 — now fully editable.`);
       await refreshItems();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Seed import failed.");
+      fail(e, "Seed import failed.");
     } finally {
       setImportingSeeds(false);
     }
@@ -488,7 +576,9 @@ function AdminPage() {
           const body = { ...(raw as Record<string, unknown>), kind: activeKind };
           await api("/api/admin/items", { method: "POST", body: JSON.stringify(body) });
           added++;
-        } catch {
+        } catch (e) {
+          // A missing grant aborts the whole batch (don't misreport as bad rows).
+          if (isOtpRequired(e)) throw e;
           skipped.push(idx + 1);
         }
       }
@@ -499,7 +589,7 @@ function AdminPage() {
       setNotice(`Imported ${added} item(s) into ${activeKind}${skippedNote}.`);
       await refreshItems();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Import failed.");
+      fail(e, "Import failed.");
     } finally {
       setImportingFile(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -526,7 +616,7 @@ function AdminPage() {
       setNotice(saved === 0 ? "No changes to save." : `Saved ${saved} setting(s).`);
       await refreshSettings();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed.");
+      fail(e, "Save failed.");
     } finally {
       setSavingSettings(false);
     }
@@ -539,7 +629,7 @@ function AdminPage() {
       await refreshSettings();
       setNotice("Setting reset to default.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Reset failed.");
+      fail(e, "Reset failed.");
     }
   }
 
@@ -668,6 +758,12 @@ function AdminPage() {
               {status && (
                 <span className="ml-2 font-mono text-xs">
                   · {status.db ? "D1 connected" : "env fallback (local)"}
+                  {status.db && (
+                    <span className={otp.verified ? "text-emerald-300" : "text-amber-300"}>
+                      {" "}
+                      · {otp.verified ? "step-up verified" : "step-up required for saves"}
+                    </span>
+                  )}
                 </span>
               )}
             </p>
@@ -684,6 +780,61 @@ function AdminPage() {
             </button>
           </div>
         </div>
+
+        {status?.db === true && (
+          <div className="mt-4 glass rounded-2xl p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-sm">Two-step verification</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {otp.verified
+                    ? `Verified${otp.expiresAt ? ` until ${new Date(otp.expiresAt).toLocaleTimeString()}` : ""} — saves, password change and settings work.`
+                    : "Every save, password change and settings edit needs a one-time code emailed to you."}
+                </p>
+              </div>
+              {otp.verified ? (
+                <button
+                  onClick={handleRevokeOtp}
+                  className="rounded-lg px-3 py-1.5 text-xs border border-border hover:bg-muted"
+                >
+                  Lock changes
+                </button>
+              ) : (
+                <button
+                  onClick={handleRequestOtp}
+                  disabled={requestingOtp}
+                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-primary-foreground bg-gradient-to-r from-cyan to-violet disabled:opacity-60"
+                >
+                  {requestingOtp ? "Sending…" : otpSent ? "Resend code" : "Email me a code"}
+                </button>
+              )}
+            </div>
+            {!otp.verified && otpSent && (
+              <form onSubmit={handleVerifyOtp} className="mt-3 flex flex-wrap items-end gap-2">
+                <label className="block">
+                  <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                    6-digit code
+                  </span>
+                  <input
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="123456"
+                    className="mt-1.5 w-40 rounded-lg bg-background/60 border border-border px-3 py-2 text-sm tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={verifyingOtp || otpCode.length !== 6}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-primary-foreground bg-gradient-to-r from-cyan to-violet disabled:opacity-60"
+                >
+                  {verifyingOtp ? "Verifying…" : "Verify"}
+                </button>
+              </form>
+            )}
+          </div>
+        )}
 
         {error && (
           <div
@@ -1148,10 +1299,10 @@ function AdminPage() {
         <div className="mt-4 glass rounded-2xl p-4 sm:p-6">
           <h2 className="font-semibold">Change password</h2>
           <p className="mt-1 font-mono text-xs text-muted-foreground">
-            Min 12 characters.{" "}
+            Min 12 characters + a verified emailed code.{" "}
             {status && !status.db
               ? "Needs D1 in production — env fallback can't rotate here."
-              : "Other sessions are signed out."}
+              : "Other sessions are signed out, and verification is reset."}
           </p>
           <form onSubmit={handlePasswordChange} className="mt-3 grid sm:grid-cols-3 gap-3">
             <label className="block">

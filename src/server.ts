@@ -20,16 +20,23 @@ import {
   validateSettingValue,
 } from "./lib/settings";
 import {
+  GRANT_TTL_MS,
   SESSION_TTL_MS,
+  buildClearedGrantCookie,
   buildClearedSessionCookie,
+  buildGrantCookie,
   buildSessionCookie,
+  getGrantTokenFromCookie,
   getSessionTokenFromCookie,
   hashPassword,
   isAllowedAdminOrigin,
+  isOtpCode,
   isSecureRequest,
+  newOtpCode,
   newSessionToken,
   normalizeUsername,
   sha256Hex,
+  timingSafeEqualHex,
   validateNewPassword,
   verifyPassword,
   PASSWORD_POLICY_MESSAGE,
@@ -72,6 +79,7 @@ type WorkerEnv = {
   ADMIN_USERNAME?: string;
   ADMIN_PASSWORD_HASH?: string;
   ADMIN_PASSWORD_SALT?: string;
+  ADMIN_EMAIL?: string;
 };
 
 const CONTACT_API_PATH = "/api/contact";
@@ -86,6 +94,15 @@ const DEFAULT_RATE_LIMIT_MAX = 5;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_RATE_LIMIT_MAX = 5;
 const LOGIN_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+// Step-up (OTP) policy: emailed 6-digit codes, short-lived and attempt-capped;
+// a verified grant then unlocks mutations for GRANT_TTL_MS.
+const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_MAX_SEND_PER_HOUR = 5;
+const OTP_MIN_RESEND_MS = 60 * 1000;
+const OTP_VERIFY_IP_MAX = 10;
+const OTP_VERIFY_IP_WINDOW_MS = 10 * 60 * 1000;
+const OTP_REQUIRED_ERROR = "Step-up verification required. Verify the emailed code first.";
 // DoS guard: every JSON endpoint shares this cap (largest legit payload is a
 // few KB — description 4000 + meta 4000 + tags). Oversized bodies are
 // rejected before JSON.parse ever runs.
@@ -99,6 +116,7 @@ const DUMMY_HASH_HEX = "00".repeat(32);
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 const contactRateLimitStore = new Map<string, number[]>();
 const loginRateLimitStore = new Map<string, number[]>();
+const otpVerifyRateLimitStore = new Map<string, number[]>();
 
 /* In-memory fallbacks for local dev before D1 is bound. Not for production. */
 type FallbackSession = { username: string; userId: number; expiresAt: number };
@@ -647,6 +665,153 @@ async function destroySession(request: Request, env: unknown): Promise<void> {
   }
 }
 
+/* ---------- Step-up verification (emailed one-time codes) ---------- */
+
+type OtpRow = {
+  id: number;
+  user_id: number;
+  code_hash: string;
+  expires_at: number;
+  attempts: number;
+  used: number;
+  created_at: number;
+};
+
+function getAlertEmail(env: unknown): string {
+  const workerEnv = getWorkerEnv(env);
+  return (
+    getEnvValue(workerEnv, "ADMIN_EMAIL") ||
+    getEnvValue(workerEnv, "CONTACT_TO_EMAIL") ||
+    DEFAULT_TO_EMAIL
+  );
+}
+
+async function sendOtpEmail(env: unknown, to: string, code: string): Promise<boolean> {
+  const workerEnv = getWorkerEnv(env);
+  const resendApiKey = getEnvValue(workerEnv, "RESEND_API_KEY");
+  if (!resendApiKey) return false;
+  const fromEmail = getEnvValue(workerEnv, "RESEND_FROM_EMAIL") || DEFAULT_FROM_EMAIL;
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [to],
+        subject: "Your portfolio admin verification code",
+        text: `Your verification code is: ${code}\n\nIt expires in 10 minutes. If you did not request this, someone may have your admin password — sign in and change it immediately, then revoke sessions by changing the password.`,
+      }),
+    });
+    if (!res.ok) {
+      console.error("Resend OTP error", res.status, await res.text().catch(() => ""));
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Resend OTP send failed", error);
+    return false;
+  }
+}
+
+/** Latest live OTP row for a user, if any. */
+async function getLiveOtp(db: D1Database, userId: number): Promise<OtpRow | null> {
+  const now = Date.now();
+  const row = await db
+    .prepare(
+      "SELECT id, user_id, code_hash, expires_at, attempts, used, created_at FROM admin_otps WHERE user_id = ? AND used = 0 AND expires_at > ? ORDER BY id DESC LIMIT 1",
+    )
+    .bind(userId, now)
+    .first<OtpRow>();
+  return row;
+}
+
+async function destroyGrant(request: Request, env: unknown): Promise<void> {
+  const token = getGrantTokenFromCookie(request);
+  if (!token) return;
+  const tokenHash = await sha256Hex(token).catch(() => null);
+  if (!tokenHash) return;
+  const db = getDb(env);
+  if (!db) return; // fallback mode keeps no grants
+  await db
+    .prepare("DELETE FROM admin_grants WHERE token_hash = ?")
+    .bind(tokenHash)
+    .run()
+    .catch(() => {});
+}
+
+async function destroyAllUserGrants(db: D1Database, userId: number): Promise<void> {
+  await db
+    .prepare("DELETE FROM admin_grants WHERE user_id = ?")
+    .bind(userId)
+    .run()
+    .catch(() => {});
+  await db
+    .prepare("DELETE FROM admin_otps WHERE user_id = ?")
+    .bind(userId)
+    .run()
+    .catch(() => {});
+  await db
+    .prepare("DELETE FROM admin_grants WHERE expires_at < ?")
+    .bind(Date.now())
+    .run()
+    .catch(() => {});
+}
+
+/** Current verified grant for this request, if any. */
+async function getGrantUser(request: Request, env: unknown): Promise<AdminUser | null> {
+  const db = getDb(env);
+  if (!db) return null; // caller decides fallback behavior
+  const token = getGrantTokenFromCookie(request);
+  if (!token) return null;
+  try {
+    const tokenHash = await sha256Hex(token);
+    const row = await db
+      .prepare("SELECT token_hash, user_id, expires_at FROM admin_grants WHERE token_hash = ?")
+      .bind(tokenHash)
+      .first<{ token_hash: string; user_id: number; expires_at: number }>();
+    if (!row || row.expires_at < Date.now()) {
+      if (row) {
+        await db
+          .prepare("DELETE FROM admin_grants WHERE token_hash = ?")
+          .bind(tokenHash)
+          .run()
+          .catch(() => {});
+      }
+      return null;
+    }
+    const user = await db
+      .prepare("SELECT id, username FROM admin_users WHERE id = ?")
+      .bind(row.user_id)
+      .first<{ id: number; username: string }>();
+    if (!user) return null;
+    return { id: user.id, username: user.username };
+  } catch (error) {
+    console.error("Grant lookup failed", error);
+    return null;
+  }
+}
+
+/**
+ * Step-up gate for mutations. Requires a live verified grant bound to the
+ * same user as the session. In local fallback mode (no D1) there is no
+ * email channel, so the gate is waived — production always enforces it.
+ */
+async function requireGrant(
+  request: Request,
+  env: unknown,
+  user: AdminUser,
+): Promise<AdminUser | Response> {
+  if (getDb(env) === null) return user;
+  const grant = await getGrantUser(request, env);
+  if (!grant || grant.id !== user.id) {
+    return jsonResponse({ error: OTP_REQUIRED_ERROR, code: "OTP_REQUIRED" }, 403);
+  }
+  return grant;
+}
+
 async function findAdminByUsername(
   env: unknown,
   username: string,
@@ -741,6 +906,167 @@ async function requireAdmin(request: Request, env: unknown): Promise<AdminUser |
   return user;
 }
 
+async function handleOtpRequest(request: Request, env: unknown): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (user instanceof Response) return user;
+  const db = getDb(env);
+  if (!db) {
+    return jsonResponse(
+      { error: "Step-up codes need D1 + email. Local fallback mode skips this step." },
+      501,
+    );
+  }
+  const now = Date.now();
+  try {
+    const recent = await db
+      .prepare(
+        "SELECT id, created_at FROM admin_otps WHERE user_id = ? AND created_at > ? ORDER BY id DESC",
+      )
+      .bind(user.id, now - 60 * 60 * 1000)
+      .all<{ id: number; created_at: number }>();
+    if (recent.results.length >= OTP_MAX_SEND_PER_HOUR) {
+      return jsonResponse({ error: "Too many codes requested. Try again in an hour." }, 429);
+    }
+    const latest = recent.results[0];
+    if (latest && now - latest.created_at < OTP_MIN_RESEND_MS) {
+      return jsonResponse({ error: "A code was just sent. Wait a minute." }, 429);
+    }
+
+    const workerEnv = getWorkerEnv(env);
+    if (!getEnvValue(workerEnv, "RESEND_API_KEY")) {
+      return jsonResponse(
+        { error: "Email is not configured. Set RESEND_API_KEY / ADMIN_EMAIL." },
+        501,
+      );
+    }
+
+    // Invalidate any previous live code before issuing a new one.
+    await db
+      .prepare("UPDATE admin_otps SET used = 1 WHERE user_id = ? AND used = 0")
+      .bind(user.id)
+      .run();
+
+    const code = newOtpCode();
+    const codeHash = await sha256Hex(code);
+    await db
+      .prepare(
+        "INSERT INTO admin_otps (user_id, code_hash, expires_at, attempts, used, created_at) VALUES (?, ?, ?, 0, 0, ?)",
+      )
+      .bind(user.id, codeHash, now + OTP_TTL_MS, now)
+      .run();
+
+    const sent = await sendOtpEmail(env, getAlertEmail(env), code);
+    if (!sent) {
+      await db
+        .prepare("UPDATE admin_otps SET used = 1 WHERE user_id = ? AND code_hash = ?")
+        .bind(user.id, codeHash)
+        .run()
+        .catch(() => {});
+      return jsonResponse({ error: "Failed to send the code. Try again shortly." }, 502);
+    }
+    return jsonResponse({ ok: true, expiresIn: Math.floor(OTP_TTL_MS / 1000) });
+  } catch (error) {
+    console.error("OTP request failed", error);
+    return jsonResponse({ error: "Failed to issue a code." }, 500);
+  }
+}
+
+async function handleOtpVerify(request: Request, env: unknown): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (user instanceof Response) return user;
+  const db = getDb(env);
+  if (!db) {
+    return jsonResponse(
+      { error: "Step-up codes need D1. Local fallback mode skips this step." },
+      501,
+    );
+  }
+  if (
+    hitRateLimit(
+      otpVerifyRateLimitStore,
+      `otp:${getClientIp(request)}`,
+      OTP_VERIFY_IP_WINDOW_MS,
+      OTP_VERIFY_IP_MAX,
+    )
+  ) {
+    return jsonResponse({ error: "Too many attempts. Try again in 10 minutes." }, 429);
+  }
+  const body = ((await readJson(request)) ?? {}) as Record<string, unknown>;
+  const code = body.code;
+  const now = Date.now();
+  const fail = () => jsonResponse({ error: "Invalid or expired code." }, 401);
+  try {
+    if (!isOtpCode(code)) {
+      await sha256Hex("dummy-code").catch(() => {});
+      return fail();
+    }
+    const row = await getLiveOtp(db, user.id);
+    if (!row) return fail();
+    if (row.attempts >= OTP_MAX_ATTEMPTS) {
+      await db.prepare("UPDATE admin_otps SET used = 1 WHERE id = ?").bind(row.id).run();
+      return jsonResponse(
+        { error: "Code locked after too many attempts. Request a new one." },
+        403,
+      );
+    }
+    const candidateHash = await sha256Hex(code);
+    if (!timingSafeEqualHex(candidateHash, row.code_hash)) {
+      await db
+        .prepare("UPDATE admin_otps SET attempts = attempts + 1 WHERE id = ?")
+        .bind(row.id)
+        .run();
+      return fail();
+    }
+    await db.prepare("UPDATE admin_otps SET used = 1 WHERE id = ?").bind(row.id).run();
+
+    const token = newSessionToken();
+    const tokenHash = await sha256Hex(token);
+    const expiresAt = now + GRANT_TTL_MS;
+    await db
+      .prepare(
+        "INSERT INTO admin_grants (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+      )
+      .bind(tokenHash, user.id, expiresAt, now)
+      .run();
+    return jsonResponse({ ok: true, expiresAt }, 200, {
+      "set-cookie": buildGrantCookie(token, isSecureRequest(request)),
+    });
+  } catch (error) {
+    console.error("OTP verify failed", error);
+    return jsonResponse({ error: "Verification failed." }, 500);
+  }
+}
+
+async function handleOtpStatus(request: Request, env: unknown): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (user instanceof Response) return user;
+  if (getDb(env) === null) {
+    return jsonResponse({ verified: false, expiresAt: null, stepUp: false });
+  }
+  const grant = await getGrantUser(request, env);
+  if (!grant || grant.id !== user.id) {
+    return jsonResponse({ verified: false, expiresAt: null, stepUp: true });
+  }
+  const db = getDb(env)!;
+  const token = getGrantTokenFromCookie(request);
+  const tokenHash = token ? await sha256Hex(token).catch(() => "") : "";
+  const row = await db
+    .prepare("SELECT expires_at FROM admin_grants WHERE token_hash = ?")
+    .bind(tokenHash)
+    .first<{ expires_at: number }>()
+    .catch(() => null);
+  return jsonResponse({ verified: true, expiresAt: row?.expires_at ?? null, stepUp: true });
+}
+
+async function handleOtpRevoke(request: Request, env: unknown): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (user instanceof Response) return user;
+  await destroyGrant(request, env);
+  return jsonResponse({ ok: true }, 200, {
+    "set-cookie": buildClearedGrantCookie(isSecureRequest(request)),
+  });
+}
+
 function parseId(id: string): number | null {
   // Content ids are positive integers; anything else is rejected so
   // read-only seed placeholders (e.g. "seed-…") can never be edited.
@@ -764,6 +1090,8 @@ async function handleAdminItems(request: Request, env: unknown, url: URL): Promi
   }
 
   if (request.method === "POST") {
+    const grant = await requireGrant(request, env, user);
+    if (grant instanceof Response) return grant;
     const body = await readJson(request);
     const validated = validateContentInput(body);
     if (!validated.ok) return jsonResponse({ error: validated.error }, 400);
@@ -837,6 +1165,8 @@ async function handleAdminItemById(
       400,
     );
   }
+  const grant = await requireGrant(request, env, user);
+  if (grant instanceof Response) return grant;
 
   if (request.method === "PUT") {
     const body = await readJson(request);
@@ -913,6 +1243,8 @@ async function handleAdminItemById(
 async function handleAdminReorder(request: Request, env: unknown): Promise<Response> {
   const user = await requireAdmin(request, env);
   if (user instanceof Response) return user;
+  const grant = await requireGrant(request, env, user);
+  if (grant instanceof Response) return grant;
   const body = (await readJson(request)) as Record<string, unknown> | undefined;
   const kind = body?.kind;
   const ids = body?.ids;
@@ -968,6 +1300,8 @@ async function handleAdminReorder(request: Request, env: unknown): Promise<Respo
 async function handleAdminSeedImport(request: Request, env: unknown): Promise<Response> {
   const user = await requireAdmin(request, env);
   if (user instanceof Response) return user;
+  const grant = await requireGrant(request, env, user);
+  if (grant instanceof Response) return grant;
   const db = getDb(env);
   if (!db) {
     return jsonResponse({ error: "Seed import needs D1. Nothing was changed." }, 501);
@@ -1062,6 +1396,8 @@ async function handleAdminSettings(request: Request, env: unknown): Promise<Resp
   }
 
   if (request.method === "PUT" || request.method === "POST") {
+    const grant = await requireGrant(request, env, user);
+    if (grant instanceof Response) return grant;
     const body = ((await readJson(request)) ?? {}) as Record<string, unknown>;
     const key = typeof body.key === "string" ? body.key : "";
     const validated = validateSettingValue(key, body.value);
@@ -1100,6 +1436,8 @@ async function handleAdminSettingDelete(
   const user = await requireAdmin(request, env);
   if (user instanceof Response) return user;
   if (!isSettingKey(key)) return jsonResponse({ error: "Unknown setting key." }, 400);
+  const grant = await requireGrant(request, env, user);
+  if (grant instanceof Response) return grant;
   const db = getDb(env);
   if (db) {
     try {
@@ -1126,6 +1464,8 @@ async function handleAdminPassword(request: Request, env: unknown): Promise<Resp
       501,
     );
   }
+  const grant = await requireGrant(request, env, user);
+  if (grant instanceof Response) return grant;
   const body = ((await readJson(request)) ?? {}) as Record<string, unknown>;
   const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
   const newPassword = body.newPassword;
@@ -1150,7 +1490,11 @@ async function handleAdminPassword(request: Request, env: unknown): Promise<Resp
     .bind(admin.id, keepHash)
     .run()
     .catch(() => {});
-  return jsonResponse({ ok: true });
+  // A password change ends all step-up grants too — re-verify afterwards.
+  await destroyAllUserGrants(db, admin.id);
+  return jsonResponse({ ok: true }, 200, {
+    "set-cookie": buildClearedGrantCookie(isSecureRequest(request)),
+  });
 }
 
 async function handleAdminRequest(request: Request, env: unknown): Promise<Response> {
@@ -1170,16 +1514,41 @@ async function handleAdminRequest(request: Request, env: unknown): Promise<Respo
         metaReady = false;
       }
     }
-    return jsonResponse({ db: Boolean(db), hasAdmin: await hasAnyAdmin(env), metaReady });
+    return jsonResponse({
+      db: Boolean(db),
+      hasAdmin: await hasAnyAdmin(env),
+      metaReady,
+      stepUp: Boolean(db),
+    });
   }
   if (path === "/api/admin/login" && request.method === "POST") {
     return handleAdminLogin(request, env);
   }
   if (path === "/api/admin/logout" && request.method === "POST") {
     await destroySession(request, env);
-    return jsonResponse({ ok: true }, 200, {
-      "set-cookie": buildClearedSessionCookie(isSecureRequest(request)),
+    await destroyGrant(request, env);
+    const secure = isSecureRequest(request);
+    // Two cookies: Headers.append keeps them as separate Set-Cookie lines
+    // (comma-joining would corrupt them — browsers never split that).
+    const headers = new Headers({
+      "content-type": "application/json; charset=utf-8",
+      ...securityHeaders(),
     });
+    headers.append("set-cookie", buildClearedSessionCookie(secure));
+    headers.append("set-cookie", buildClearedGrantCookie(secure));
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
+  }
+  if (path === "/api/admin/otp/request" && request.method === "POST") {
+    return handleOtpRequest(request, env);
+  }
+  if (path === "/api/admin/otp/verify" && request.method === "POST") {
+    return handleOtpVerify(request, env);
+  }
+  if (path === "/api/admin/otp/status" && request.method === "GET") {
+    return handleOtpStatus(request, env);
+  }
+  if (path === "/api/admin/otp/revoke" && request.method === "POST") {
+    return handleOtpRevoke(request, env);
   }
   if (path === "/api/admin/me" && request.method === "GET") {
     const user = await getSessionUser(request, env);
