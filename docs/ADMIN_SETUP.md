@@ -30,9 +30,9 @@ npm run db:migrate:remote   # production
 ```
 
 This applies `migrations/0001_init.sql` (`admin_users`, `admin_sessions`,
-`content_items`) and `migrations/0002_meta_settings.sql` (`meta` column +
-`site_settings` table). Re-run both commands after pulling updates that add
-new migration files.
+`content_items`), `0002_meta_settings.sql` (`meta` column + `site_settings`)
+and `0003_otp_grants.sql` (`admin_otps` + `admin_grants`). Re-run both commands
+after pulling updates that add new migration files.
 
 ## 3. Create your admin user (hashed, never plaintext)
 

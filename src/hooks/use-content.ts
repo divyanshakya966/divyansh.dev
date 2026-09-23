@@ -30,7 +30,7 @@ export function usePublicContent(kind: ContentKind): ContentState {
           }
         }
       } catch {
-        // Keep seeds on network failure.
+        // keep seeds
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -64,7 +64,7 @@ export function useSiteSettings(): SettingsState {
           setSettings((prev) => ({ ...prev, ...data.settings }));
         }
       } catch {
-        // Keep defaults on network failure.
+        // keep defaults
       } finally {
         if (!cancelled) setLoading(false);
       }

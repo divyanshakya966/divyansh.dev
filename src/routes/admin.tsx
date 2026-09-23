@@ -86,7 +86,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     data = await res.json();
   } catch {
-    // ignore
+    // non-JSON body: error message falls back to status text below
   }
   if (!res.ok) {
     const err =
@@ -273,7 +273,7 @@ function AdminPage() {
     try {
       await api("/api/admin/logout", { method: "POST" });
     } catch {
-      // ignore
+      // already logged out server-side — still clear local state below
     }
     setUser(null);
     setItems([]);
@@ -337,7 +337,7 @@ function AdminPage() {
     try {
       await api("/api/admin/otp/revoke", { method: "POST" });
     } catch {
-      // ignore
+      // grant already gone server-side — still clear local state below
     }
     setOtp({ verified: false, expiresAt: null });
     setOtpCode("");

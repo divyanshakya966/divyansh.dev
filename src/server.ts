@@ -480,10 +480,8 @@ async function queryVisibleContent(
   db: D1Database | null,
   kind: ContentKind,
 ): Promise<{ items: ContentItem[]; source: ContentSource }> {
-  // Single-statement snapshot: visible rows AND the total count must come
-  // from the same read, otherwise two sequential queries can straddle D1
-  // replication states (visible=∅ on a stale replica, count>0 fresh) and
-  // briefly report an empty section that never existed.
+  // Single-statement snapshot so visible rows and totals can't straddle
+  // D1 replication states and briefly report an empty section.
   const snapshot = (rows: ContentItem[]): { items: ContentItem[]; source: ContentSource } => {
     const visible = sortContent(rows.filter((r) => r.is_visible));
     if (visible.length > 0) return { items: visible, source: "db" };
@@ -559,9 +557,8 @@ async function handleContentRequest(request: Request, env: unknown): Promise<Res
     return jsonResponse({ error: "Invalid kind. Use one of: " + CONTENT_KINDS.join(", ") }, 400);
   }
   const { items, source } = await queryVisibleContent(getDb(env), kindParam);
-  // Never cache an empty answer: a transient empty read must not poison the
-  // edge/browser cache and blank sections on reload. Non-empty answers carry
-  // the source so clients can tell deliberate admin-hides (db) apart.
+  // Never cache an empty answer: it must not poison edge/browser caches.
+  // Non-empty answers carry the source so deliberate admin-hides stay distinct.
   return jsonResponse(
     { items, source },
     200,
@@ -636,7 +633,6 @@ async function createSession(env: unknown, user: AdminUser): Promise<string> {
       )
       .bind(tokenHash, user.id, expiresAt, Date.now())
       .run();
-    // Opportunistic cleanup of expired sessions.
     db.prepare("DELETE FROM admin_sessions WHERE expires_at < ?")
       .bind(Date.now())
       .run()
@@ -716,7 +712,6 @@ async function sendOtpEmail(env: unknown, to: string, code: string): Promise<boo
   }
 }
 
-/** Latest live OTP row for a user, if any. */
 async function getLiveOtp(db: D1Database, userId: number): Promise<OtpRow | null> {
   const now = Date.now();
   const row = await db
@@ -760,7 +755,6 @@ async function destroyAllUserGrants(db: D1Database, userId: number): Promise<voi
     .catch(() => {});
 }
 
-/** Current verified grant for this request, if any. */
 async function getGrantUser(request: Request, env: unknown): Promise<AdminUser | null> {
   const db = getDb(env);
   if (!db) return null; // caller decides fallback behavior
@@ -794,11 +788,7 @@ async function getGrantUser(request: Request, env: unknown): Promise<AdminUser |
   }
 }
 
-/**
- * Step-up gate for mutations. Requires a live verified grant bound to the
- * same user as the session. In local fallback mode (no D1) there is no
- * email channel, so the gate is waived — production always enforces it.
- */
+/** Step-up gate: live grant bound to the session user. Waived only in local fallback mode. */
 async function requireGrant(
   request: Request,
   env: unknown,
@@ -829,7 +819,6 @@ async function findAdminByUsername(
       return null;
     }
   }
-  // Fallback: single admin from env (local dev before D1 setup).
   const workerEnv = getWorkerEnv(env);
   const envUser = getEnvValue(workerEnv, "ADMIN_USERNAME")?.toLowerCase();
   const envHash = getEnvValue(workerEnv, "ADMIN_PASSWORD_HASH");
@@ -944,8 +933,7 @@ async function handleOtpRequest(request: Request, env: unknown): Promise<Respons
       return jsonResponse({ error: "Alert email is misconfigured. Set a valid ADMIN_EMAIL." }, 501);
     }
 
-    // Invalidate any previous live code before issuing a new one, and drop
-    // long-dead rows so the table stays tiny.
+    // Invalidate previous live codes and drop dead rows to keep the table tiny.
     await db
       .prepare("UPDATE admin_otps SET used = 1 WHERE user_id = ? AND used = 0")
       .bind(user.id)
@@ -1492,7 +1480,6 @@ async function handleAdminPassword(request: Request, env: unknown): Promise<Resp
     .prepare("UPDATE admin_users SET password_hash = ?, salt = ? WHERE id = ?")
     .bind(hash, salt, admin.id)
     .run();
-  // Invalidate all other sessions for this user.
   const token = getSessionTokenFromCookie(request);
   const keepHash = token ? await sha256Hex(token).catch(() => "") : "";
   await db

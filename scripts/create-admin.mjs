@@ -76,10 +76,8 @@ function normalizeUsername(v) {
 }
 
 function promptSecret(question) {
-  // Suppress echo via readline's own output hook. No extra stream listeners:
-  // attaching 'data' handlers to process.stdin races readline's raw-mode
-  // reader and can corrupt pasted input (the stored password then differs
-  // from what was typed, failing login despite a matching confirmation).
+  // Suppress echo via readline's own output hook only — extra 'data'
+  // listeners on stdin race its raw-mode reader and corrupt pasted input.
   return new Promise((resolve) => {
     const rl = readline.createInterface({
       input: process.stdin,

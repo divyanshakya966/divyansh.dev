@@ -58,7 +58,7 @@ function parseTags(tags: unknown): string[] {
         return parsed.filter((t): t is string => typeof t === "string");
       }
     } catch {
-      // fall through — treat as comma-separated below
+      // not JSON — fall through to comma-separated parsing below
     }
     return tags
       .split(",")
@@ -80,7 +80,7 @@ export function parseMeta(meta: unknown): Record<string, unknown> {
         return parsed as Record<string, unknown>;
       }
     } catch {
-      // fall through
+      // not a JSON object — fall through to {}
     }
   }
   return {};

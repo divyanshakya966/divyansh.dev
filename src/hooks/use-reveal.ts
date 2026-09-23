@@ -10,10 +10,9 @@ import { useEffect } from "react";
  *   <div className="reveal" data-reveal="blur" />
  *   <div className="reveal-stagger">               -> children .reveal animate with auto delay
  *
- * Dynamic-safe: portfolio cards remount when server data arrives (seed keys
- * swap for database ids) and sections appear/disappear from admin edits. A
- * MutationObserver picks up every late-mounted .reveal node so nothing stays
- * invisible — the original mount-only version stranded them at opacity 0.
+ * Dynamic-safe: a MutationObserver picks up late-mounted .reveal nodes
+ * (remounts after data fetch, admin-driven sections), which would otherwise
+ * stay invisible at opacity 0.
  */
 const SELECTOR = ".reveal, .reveal-child";
 
