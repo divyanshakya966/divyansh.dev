@@ -1,4 +1,5 @@
 import { Section } from "./Section";
+import { Reveal } from "./Reveal";
 import { Award, BadgeCheck, ExternalLink, ShieldCheck } from "lucide-react";
 import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
@@ -20,56 +21,55 @@ export function Certifications() {
       }
       description="Industry certifications with verifiable credentials — click through to inspect each certificate."
     >
-      <div className="grid md:grid-cols-2 gap-5">
+      <div className="overflow-hidden rounded-2xl border border-white/10">
+        <div
+          aria-hidden="true"
+          className="hidden sm:grid grid-cols-[1fr_auto] gap-4 border-b border-white/10 bg-white/[0.02] px-5 py-3 font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground"
+        >
+          <span>Credential</span>
+          <span>Proof</span>
+        </div>
         {items.map((cert, i) => (
-          <article
-            key={String(cert.id)}
-            className="reveal card-hover group relative glass rounded-2xl p-6 hover:-translate-y-1 hover:shadow-glow overflow-hidden"
-            style={{ transitionDelay: `${i * 80}ms` }}
-          >
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-gradient-to-br from-cyan/[0.06] via-transparent to-violet/[0.08]" />
-            <div className="relative">
-              <div className="flex items-center justify-between gap-3">
-                <div className="grid place-items-center h-10 w-10 rounded-xl bg-gradient-to-br from-cyan/20 to-violet/20 border border-border shrink-0">
-                  {i === 0 ? <ShieldCheck size={18} /> : <Award size={18} />}
-                </div>
-                {cert.url && (
-                  <a
-                    href={cert.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="inline-flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors rounded-md px-2 py-1 hover:bg-muted"
-                    aria-label={`Verify ${cert.title}`}
-                  >
-                    <BadgeCheck size={13} />
-                    Verify
-                    <ExternalLink size={12} />
-                  </a>
+          <Reveal key={String(cert.id)} variant="up" delay={Math.min(i * 0.05, 0.2)}>
+            <article className="group grid sm:grid-cols-[auto_1fr_auto] items-start gap-4 border-b border-white/10 bg-transparent px-5 py-5 transition-colors duration-300 last:border-b-0 hover:bg-white/[0.03]">
+              <div className="hidden sm:grid place-items-center h-10 w-10 rounded-xl border border-white/10 bg-white/[0.04] shrink-0 transition-transform duration-300 group-hover:scale-110">
+                {i === 0 ? <ShieldCheck size={18} /> : <Award size={18} />}
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-semibold leading-snug">{cert.title}</h3>
+                {cert.subtitle && (
+                  <div className="mt-1 font-mono text-xs text-muted-foreground">
+                    {cert.subtitle}
+                  </div>
+                )}
+                {cert.description && (
+                  <p className="mt-2 text-sm text-muted-foreground leading-relaxed line-clamp-2 max-w-2xl">
+                    {cert.description}
+                  </p>
+                )}
+                {cert.tags.length > 0 && (
+                  <div className="mt-2 font-mono text-[11px] text-muted-foreground/80 truncate">
+                    {cert.tags.slice(0, 4).join("  ·  ")}
+                  </div>
                 )}
               </div>
-              <h3 className="mt-4 text-lg font-semibold leading-snug">{cert.title}</h3>
-              {cert.subtitle && (
-                <div className="mt-1 font-mono text-xs text-muted-foreground">{cert.subtitle}</div>
+              {cert.url ? (
+                <a
+                  href={cert.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  aria-label={`Verify ${cert.title}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 font-mono text-xs text-muted-foreground transition-all duration-300 hover:border-white hover:bg-white hover:text-black"
+                >
+                  <BadgeCheck size={13} />
+                  Verify
+                  <ExternalLink size={12} />
+                </a>
+              ) : (
+                <span className="font-mono text-[11px] text-muted-foreground/60">—</span>
               )}
-              {cert.description && (
-                <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-                  {cert.description}
-                </p>
-              )}
-              {cert.tags.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  {cert.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-mono text-muted-foreground"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </article>
+            </article>
+          </Reveal>
         ))}
       </div>
     </Section>

@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { motion } from "motion/react";
 import { Section } from "./Section";
-import { Github, ExternalLink } from "lucide-react";
+import { Reveal } from "./Reveal";
+import { ArrowUpRight, Github, ExternalLink } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -61,121 +63,145 @@ export function Projects() {
       }
       description="DevSecOps tooling, bots and full-stack apps I've shipped or am actively building."
     >
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="border-t border-white/10">
         {projects.map((p, i) => (
-          <article
-            key={p.id}
-            role="button"
-            tabIndex={0}
-            aria-haspopup="dialog"
-            aria-label={`View details about ${p.title}`}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setOpen(p);
-              }
-            }}
-            className="reveal card-hover group relative glass rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:shadow-glow overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            style={{ transitionDelay: `${i * 60}ms` }}
-            onClick={() => setOpen(p)}
-          >
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-gradient-to-br from-cyan/[0.06] via-transparent to-violet/[0.08]" />
-            <div className="relative">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                  {p.tag}
-                </span>
-                <div className="flex gap-1.5">
-                  {p.github && (
-                    <a
-                      href={p.github}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="grid place-items-center h-7 w-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label="GitHub"
+          <Reveal key={p.id} variant="up" delay={Math.min(i * 0.05, 0.3)}>
+            <article
+              role="button"
+              tabIndex={0}
+              aria-haspopup="dialog"
+              aria-label={`View details about ${p.title}`}
+              data-cursor="view"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setOpen(p);
+                }
+              }}
+              onClick={() => setOpen(p)}
+              className="group relative grid grid-cols-[auto_1fr_auto] items-start sm:items-center gap-3 sm:gap-6 border-b border-white/10 px-2 sm:px-4 py-5 sm:py-6 cursor-pointer outline-none transition-colors duration-300 hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="pt-1 sm:pt-0 font-mono text-xs text-muted-foreground tabular-nums">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                    {p.tag}
+                  </span>
+                  <span className="hidden sm:inline h-px w-6 bg-white/15" aria-hidden="true" />
+                  <span className="hidden md:inline font-mono text-[11px] text-muted-foreground/70 truncate">
+                    {p.stack.slice(0, 3).join(" · ")}
+                  </span>
+                </div>
+                <h3 className="mt-1.5 text-lg sm:text-2xl font-semibold tracking-tight transition-transform duration-300 group-hover:translate-x-1">
+                  {p.title}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground leading-relaxed line-clamp-2 max-w-2xl">
+                  {p.description}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-1.5 md:hidden">
+                  {p.stack.slice(0, 4).map((s) => (
+                    <span
+                      key={s}
+                      className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
                     >
-                      <Github size={13} />
-                    </a>
-                  )}
-                  {p.demo && (
-                    <a
-                      href={p.demo}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="grid place-items-center h-7 w-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label="Live"
-                    >
-                      <ExternalLink size={13} />
-                    </a>
-                  )}
+                      {s}
+                    </span>
+                  ))}
                 </div>
               </div>
-              <h3 className="mt-4 text-xl font-semibold">{p.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground leading-relaxed line-clamp-3">
-                {p.description}
-              </p>
-              <div className="mt-5 flex flex-wrap gap-1.5">
-                {p.stack.map((s) => (
-                  <span
-                    key={s}
-                    className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-mono text-muted-foreground"
+              <div className="flex items-center gap-1.5 pt-1 sm:pt-0">
+                {p.github && (
+                  <a
+                    href={p.github}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="GitHub"
+                    className="grid place-items-center h-8 w-8 rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-white/15 hover:bg-white/[0.05] hover:text-foreground"
                   >
-                    {s}
-                  </span>
-                ))}
+                    <Github size={14} />
+                  </a>
+                )}
+                {p.demo && (
+                  <a
+                    href={p.demo}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Live"
+                    className="grid place-items-center h-8 w-8 rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-white/15 hover:bg-white/[0.05] hover:text-foreground"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                )}
+                <span className="grid place-items-center h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-all duration-300 group-hover:border-white/30 group-hover:bg-white group-hover:text-black">
+                  <ArrowUpRight
+                    size={14}
+                    className="transition-transform duration-300 group-hover:translate-x-[1px] group-hover:-translate-y-[1px]"
+                  />
+                </span>
               </div>
-            </div>
-          </article>
+            </article>
+          </Reveal>
         ))}
       </div>
+      <p className="mt-4 font-mono text-[11px] text-muted-foreground">
+        {"~/ click a row for details — GitHub icons open source directly"}
+      </p>
 
       <Dialog open={!!open} onOpenChange={(isOpen) => setOpen(isOpen ? open : null)}>
         <DialogContent className="max-w-lg max-h-85-viewport overflow-y-auto border-border/60 bg-card/70 backdrop-blur-md sm:rounded-2xl shadow-elegant">
-          <DialogHeader className="text-left">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              {open?.tag}
-            </span>
-            <DialogTitle className="text-2xl font-bold tracking-tight mt-2">
-              {open?.title}
-            </DialogTitle>
-          </DialogHeader>
-          <DialogDescription className="text-left text-sm text-muted-foreground leading-relaxed">
-            {open?.long}
-          </DialogDescription>
-          <div className="flex flex-wrap gap-1.5">
-            {(open?.stack ?? []).map((s) => (
-              <span
-                key={s}
-                className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-mono text-muted-foreground"
-              >
-                {s}
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.96, filter: "blur(10px)" }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+            transition={{ type: "spring", stiffness: 300, damping: 28, mass: 0.6 }}
+          >
+            <DialogHeader className="text-left">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                {open?.tag}
               </span>
-            ))}
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {open?.github && (
-              <a
-                href={open.github}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm glass hover:bg-muted"
-              >
-                <Github size={14} /> Source
-              </a>
-            )}
-            {open?.demo && (
-              <a
-                href={open.demo}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm bg-gradient-to-r from-cyan to-violet text-primary-foreground"
-              >
-                <ExternalLink size={14} /> Live
-              </a>
-            )}
-          </div>
+              <DialogTitle className="text-2xl font-bold tracking-tight mt-2">
+                {open?.title}
+              </DialogTitle>
+            </DialogHeader>
+            <DialogDescription className="text-left text-sm text-muted-foreground leading-relaxed">
+              {open?.long}
+            </DialogDescription>
+            <div className="flex flex-wrap gap-1.5">
+              {(open?.stack ?? []).map((s) => (
+                <span
+                  key={s}
+                  className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-mono text-muted-foreground"
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {open?.github && (
+                <a
+                  href={open.github}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm glass hover:bg-muted"
+                >
+                  <Github size={14} /> Source
+                </a>
+              )}
+              {open?.demo && (
+                <a
+                  href={open.demo}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm bg-gradient-to-r from-cyan to-violet text-primary-foreground"
+                >
+                  <ExternalLink size={14} /> Live
+                </a>
+              )}
+            </div>
+          </motion.div>
         </DialogContent>
       </Dialog>
     </Section>

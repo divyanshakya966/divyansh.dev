@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Nav } from "@/components/portfolio/Nav";
+import { CommandPalette } from "@/components/portfolio/CommandPalette";
 import { SocialPanel } from "@/components/portfolio/SocialPanel";
 import { RightPanel } from "@/components/portfolio/RightPanel";
 import { BackgroundFX } from "@/components/portfolio/BackgroundFX";
@@ -74,6 +75,7 @@ function Index() {
     <main id="main-content" tabIndex={-1} className="relative min-h-screen outline-none">
       <BackgroundFX />
       <Cursor />
+      <CommandPalette />
       {!bootDone && <IntroBoot onCloseStart={handleBootCloseStart} onDone={handleBootDone} />}
       <Nav />
       <SocialPanel />

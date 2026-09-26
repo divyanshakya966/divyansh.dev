@@ -1,4 +1,5 @@
 import { Section } from "./Section";
+import { Reveal } from "./Reveal";
 import { PenLine, ExternalLink } from "lucide-react";
 import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
@@ -25,55 +26,41 @@ export function Blogs() {
       }
       description="Short-form notes on security, DevOps and building in public."
     >
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="border-t border-white/10">
         {items.map((post, i) => (
-          <article
-            key={String(post.id)}
-            className="reveal card-hover group relative glass rounded-2xl p-6 hover:-translate-y-1 hover:shadow-glow overflow-hidden"
-            style={{ transitionDelay: `${i * 60}ms` }}
-          >
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-gradient-to-br from-cyan/[0.06] via-transparent to-violet/[0.08]" />
-            <div className="relative">
-              <div className="flex items-center justify-between gap-3">
-                <div className="grid place-items-center h-9 w-9 rounded-xl bg-gradient-to-br from-cyan/20 to-violet/20 border border-border shrink-0">
-                  <PenLine size={16} />
+          <Reveal key={String(post.id)} variant="up" delay={Math.min(i * 0.05, 0.25)}>
+            <article className="group grid sm:grid-cols-[auto_1fr_auto] items-start sm:items-center gap-3 sm:gap-5 border-b border-white/10 px-2 sm:px-4 py-5 transition-colors duration-300 hover:bg-white/[0.03]">
+              <span className="hidden sm:block font-mono text-xs text-muted-foreground tabular-nums">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+                  <PenLine size={12} aria-hidden="true" />
+                  <span className="truncate">{post.subtitle || "Note"}</span>
                 </div>
-                {post.url ? (
-                  <a
-                    href={post.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="inline-flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors rounded-md px-2 py-1 hover:bg-muted"
-                    aria-label={`Read ${post.title}`}
-                  >
-                    Read
-                    <ExternalLink size={12} />
-                  </a>
-                ) : null}
+                <h3 className="mt-1.5 text-base sm:text-lg font-semibold tracking-tight leading-snug decoration-white/40 underline-offset-4 group-hover:underline">
+                  {post.title}
+                </h3>
+                {post.description && (
+                  <p className="mt-1 text-sm text-muted-foreground leading-relaxed line-clamp-2 max-w-3xl">
+                    {post.description}
+                  </p>
+                )}
               </div>
-              <h3 className="mt-4 text-base font-semibold leading-snug">{post.title}</h3>
-              {post.subtitle && (
-                <div className="mt-1 font-mono text-xs text-muted-foreground">{post.subtitle}</div>
-              )}
-              {post.description && (
-                <p className="mt-2.5 text-sm text-muted-foreground leading-relaxed line-clamp-3">
-                  {post.description}
-                </p>
-              )}
-              {post.tags.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  {post.tags.slice(0, 5).map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-mono text-muted-foreground"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </article>
+              {post.url ? (
+                <a
+                  href={post.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  aria-label={`Read ${post.title}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 font-mono text-xs text-muted-foreground transition-all duration-300 hover:border-white hover:bg-white hover:text-black"
+                >
+                  Read
+                  <ExternalLink size={12} />
+                </a>
+              ) : null}
+            </article>
+          </Reveal>
         ))}
       </div>
     </Section>

@@ -1,4 +1,5 @@
 import { Section } from "./Section";
+import { Reveal } from "./Reveal";
 import { Activity, BookOpen, Hammer } from "lucide-react";
 import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
@@ -41,49 +42,84 @@ export function Building() {
       }
       description="A live snapshot of what I'm learning and shipping right now."
     >
-      <div className="grid md:grid-cols-3 gap-4">
-        <div className="reveal glass rounded-2xl p-6 relative overflow-hidden">
-          <div className="absolute top-4 right-4 flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-cyan opacity-75 animate-ping" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
+      <Reveal variant="up">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.015]">
+          <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.02] px-4 py-3">
+            <span className="flex gap-1.5" aria-hidden="true">
+              <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
+              <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
+              <span className="h-2.5 w-2.5 rounded-full bg-white/40" />
             </span>
-            Live
+            <span className="ml-2 font-mono text-[11px] text-muted-foreground">
+              ~/ status --live
+            </span>
+            <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-white opacity-75 animate-ping" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+              </span>
+              Live
+            </span>
           </div>
-          <Hammer size={18} className="text-cyan" />
-          <h3 className="mt-4 font-semibold">{build.title}</h3>
-          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{build.description}</p>
-        </div>
-
-        {learn ? (
-          <div className="reveal glass rounded-2xl p-6 [transition-delay:80ms]">
-            <BookOpen size={18} className="text-violet" />
-            <h3 className="mt-4 font-semibold">{learn.title}</h3>
-            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              {linesOf(learn).map((line) => (
-                <li key={line} className="flex items-center gap-2">
-                  <span className="h-1 w-1 rounded-full bg-violet" /> {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        {now ? (
-          <div className="reveal glass rounded-2xl p-6 [transition-delay:160ms]">
-            <Activity size={18} className="text-blue" />
-            <h3 className="mt-4 font-semibold">{now.title}</h3>
-            <div className="mt-4 space-y-3">
-              {statsOf(now).map((s) => (
-                <div key={s.l} className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{s.l}</span>
-                  <span className="font-mono">{s.v}</span>
-                </div>
-              ))}
+          <div className="grid md:grid-cols-3 md:divide-x divide-white/10 divide-y md:divide-y-0">
+            <div className="group p-6 transition-colors hover:bg-white/[0.02]">
+              <Hammer
+                size={18}
+                className="text-foreground transition-transform duration-300 group-hover:rotate-12"
+              />
+              <h3 className="mt-4 font-semibold">{build.title}</h3>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                {build.description}
+              </p>
             </div>
+
+            {learn ? (
+              <div className="group p-6 transition-colors hover:bg-white/[0.02]">
+                <BookOpen
+                  size={18}
+                  className="text-foreground transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110"
+                />
+                <h3 className="mt-4 font-semibold">{learn.title}</h3>
+                <ul className="mt-3 space-y-0 text-sm text-muted-foreground">
+                  {linesOf(learn).map((line) => (
+                    <li
+                      key={line}
+                      className="flex items-center gap-2 border-b border-white/[0.06] py-2 last:border-b-0"
+                    >
+                      <span className="font-mono text-white/30">▸</span> {line}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {now ? (
+              <div className="group p-6 transition-colors hover:bg-white/[0.02]">
+                <Activity
+                  size={18}
+                  className="text-foreground transition-transform duration-300 group-hover:scale-110"
+                />
+                <h3 className="mt-4 font-semibold">{now.title}</h3>
+                <div className="mt-4 space-y-0">
+                  {statsOf(now).map((s) => (
+                    <div
+                      key={s.l}
+                      className="flex items-baseline gap-2 border-b border-white/[0.06] py-2.5 text-sm last:border-b-0"
+                    >
+                      <span className="text-muted-foreground">{s.l}</span>
+                      <span
+                        aria-hidden="true"
+                        className="mx-1 flex-1 border-b border-dotted border-white/15"
+                      />
+                      <span className="font-mono text-foreground">{s.v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
+        </div>
+      </Reveal>
     </Section>
   );
 }

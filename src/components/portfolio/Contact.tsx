@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Section } from "./Section";
-import { ArrowUpRight, Github, Linkedin, Mail, Send } from "lucide-react";
+import { Magnetic } from "./Magnetic";
+import { Reveal } from "./Reveal";
+import { ArrowUpRight, Check, Copy, Github, Linkedin, Mail, Send } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useSiteSettings } from "@/hooks/use-content";
@@ -13,6 +16,7 @@ const DEFAULT_LINKEDIN = "https://www.linkedin.com/in/divyanshakya966";
 
 export function Contact() {
   const [sending, setSending] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { settings } = useSiteSettings();
   const emailRaw = (settings.contact_email ?? "").trim();
   const email = emailRaw.includes("@") ? emailRaw : DEFAULT_EMAIL;
@@ -24,6 +28,22 @@ export function Contact() {
     "Open to Cybersecurity and DevSecOps internships, hackathons and meaningful OSS work.";
 
   if (!isSectionVisible(settings, "contact")) return null;
+
+  const copyEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(email);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = email;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    setCopied(true);
+    toast.success("Email copied to clipboard");
+    window.setTimeout(() => setCopied(false), 1600);
+  };
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -82,83 +102,113 @@ export function Contact() {
       description="Open to internships, hackathons and open source collaborations."
     >
       <div className="grid lg:grid-cols-5 gap-6">
-        <form
-          onSubmit={onSubmit}
-          className="reveal lg:col-span-3 glass rounded-2xl p-6 sm:p-8 space-y-4"
-        >
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Name" name="name" required />
-            <Field label="Email" name="email" type="email" required />
-          </div>
-          <div>
-            <label
-              htmlFor="message"
-              className="text-xs font-mono uppercase tracking-widest text-muted-foreground"
-            >
-              Message
-            </label>
-            <textarea
-              name="message"
-              id="message"
-              required
-              maxLength={5000}
-              rows={5}
-              className="mt-2 w-full rounded-xl bg-background/40 border border-border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition resize-none"
-              placeholder="Tell me about the role, hackathon, or project..."
-            />
-          </div>
-          <input
-            type="text"
-            name="company"
-            tabIndex={-1}
-            autoComplete="off"
-            className="hidden"
-            aria-hidden="true"
-          />
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={sending}
-              className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium text-primary-foreground bg-gradient-to-r from-cyan to-violet shadow-glow hover:scale-[1.02] transition-transform disabled:opacity-60"
-            >
-              <Send size={15} /> {sending ? "Sending..." : "Send message"}
-            </button>
-            <a
-              href="/resume/Divyansh_Shakya_Resume_Digital.pdf"
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium glass hover:bg-muted"
-            >
-              <ArrowUpRight size={15} /> Resume
-            </a>
-          </div>
-        </form>
-
-        <div className="reveal lg:col-span-2 space-y-3">
-          <SocialLink href={`mailto:${email}`} icon={Mail} label="Email" sub={email} />
-          <SocialLink
-            href={github}
-            icon={Github}
-            label="GitHub"
-            sub={`@${github.split("/").filter(Boolean).pop() ?? "divyanshakya966"}`}
-          />
-          <SocialLink
-            href={linkedin}
-            icon={Linkedin}
-            label="LinkedIn"
-            sub={linkedin.includes("/in/") ? `in/${linkedin.split("/in/")[1]}` : "LinkedIn"}
-          />
-          <div className="glass rounded-2xl p-5 mt-2">
-            <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-cyan opacity-75 animate-ping" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
-              </span>
-              {status}
+        <Reveal variant="up" className="lg:col-span-3">
+          <form
+            onSubmit={onSubmit}
+            className="glass rounded-2xl p-6 sm:p-8 space-y-4 h-full transition-colors focus-within:border-white/20"
+          >
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Name" name="name" required />
+              <Field label="Email" name="email" type="email" required />
             </div>
-            <p className="mt-2 text-sm text-muted-foreground">{blurb}</p>
+            <div>
+              <label
+                htmlFor="message"
+                className="text-xs font-mono uppercase tracking-widest text-muted-foreground"
+              >
+                Message
+              </label>
+              <textarea
+                name="message"
+                id="message"
+                required
+                maxLength={5000}
+                rows={5}
+                className="mt-2 w-full rounded-xl bg-background/40 border border-border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition resize-none"
+                placeholder="Tell me about the role, hackathon, or project..."
+              />
+            </div>
+            <input
+              type="text"
+              name="company"
+              tabIndex={-1}
+              autoComplete="off"
+              className="hidden"
+              aria-hidden="true"
+            />
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Magnetic strength={0.25} max={10}>
+                <motion.button
+                  type="submit"
+                  disabled={sending}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium text-primary-foreground bg-gradient-to-r from-cyan to-violet shadow-glow disabled:opacity-60"
+                >
+                  <Send size={15} /> {sending ? "Sending..." : "Send message"}
+                </motion.button>
+              </Magnetic>
+              <Magnetic strength={0.25} max={10}>
+                <motion.a
+                  href="/resume/Divyansh_Shakya_Resume_Digital.pdf"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium glass hover:bg-muted"
+                >
+                  <ArrowUpRight size={15} /> Resume
+                </motion.a>
+              </Magnetic>
+            </div>
+          </form>
+        </Reveal>
+
+        <Reveal variant="up" delay={0.1} className="lg:col-span-2">
+          <div className="space-y-3 h-full">
+            <SocialLink href={`mailto:${email}`} icon={Mail} label="Email" sub={email} />
+            <SocialLink
+              href={github}
+              icon={Github}
+              label="GitHub"
+              sub={`@${github.split("/").filter(Boolean).pop() ?? "divyanshakya966"}`}
+            />
+            <SocialLink
+              href={linkedin}
+              icon={Linkedin}
+              label="LinkedIn"
+              sub={linkedin.includes("/in/") ? `in/${linkedin.split("/in/")[1]}` : "LinkedIn"}
+            />
+            <div className="glass rounded-2xl p-5 mt-2">
+              <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-white opacity-75 animate-ping" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+                </span>
+                {status}
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">{blurb}</p>
+              <button
+                onClick={copyEmail}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 font-mono text-xs text-muted-foreground hover:text-foreground hover:border-white/25 transition-colors"
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    key={copied ? "check" : "copy"}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                    className="inline-flex items-center gap-2"
+                  >
+                    {copied ? <Check size={13} /> : <Copy size={13} />}
+                    {copied ? "Copied!" : email}
+                  </motion.span>
+                </AnimatePresence>
+              </button>
+            </div>
           </div>
-        </div>
+        </Reveal>
       </div>
     </Section>
   );
@@ -212,16 +262,16 @@ function SocialLink({
       href={href}
       target={isMailTo ? undefined : "_blank"}
       rel={isMailTo ? undefined : "noreferrer noopener"}
-      className="group flex items-center gap-4 glass rounded-2xl p-4 hover:shadow-glow hover:-translate-y-0.5 transition-all"
+      className="group flex items-center gap-4 glass rounded-2xl p-4 transition-all duration-300 hover:shadow-glow hover:-translate-y-0.5 hover:border-white/20"
     >
-      <div className="grid place-items-center h-11 w-11 rounded-xl bg-gradient-to-br from-cyan/20 to-violet/20 border border-border">
+      <div className="grid place-items-center h-11 w-11 rounded-xl bg-white/[0.06] border border-white/10 transition-transform duration-300 group-hover:scale-110">
         <Icon size={18} />
       </div>
       <div className="min-w-0">
         <div className="text-sm font-semibold">{label}</div>
         <div className="text-xs text-muted-foreground truncate">{sub}</div>
       </div>
-      <span className="ml-auto text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+      <span className="ml-auto text-xs text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all">
         →
       </span>
     </a>

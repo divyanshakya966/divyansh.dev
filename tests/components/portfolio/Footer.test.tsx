@@ -13,10 +13,10 @@ describe("Footer", () => {
   it("renders the GitHub CTA", () => {
     render(<Footer />);
     expect(screen.getByText(/Crafting open-source software/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
-      "href",
-      "https://github.com/divyanshakya966/divyansh.dev",
-    );
+    const repoLink = screen
+      .getAllByRole("link", { name: "GitHub" })
+      .find((a) => a.getAttribute("href") === "https://github.com/divyanshakya966/divyansh.dev");
+    expect(repoLink).not.toBeUndefined();
   });
 
   it("is a <footer> element", () => {

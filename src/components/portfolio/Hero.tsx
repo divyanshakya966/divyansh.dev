@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "motion/react";
 import { ArrowDown, ArrowUpRight } from "lucide-react";
+import { Magnetic } from "./Magnetic";
 import { useSiteSettings } from "@/hooks/use-content";
 import { DEFAULT_HERO_ROLES, settingLines } from "@/lib/settings";
 
@@ -140,16 +142,36 @@ export function Hero({ booted }: { booted: boolean }) {
           <div
             className={`flex justify-center mb-5 sm:mb-8 ${booted ? "animate-fade-in" : "boot-gated"}`}
           >
-            <div className="relative w-24 h-24 sm:w-40 sm:h-40 rounded-full overflow-hidden border-2 border-gradient-to-br from-cyan to-violet p-0.5 shadow-lg shadow-cyan/20">
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan/10 to-violet/10 -z-10" />
-              <img
-                src="/avatar.png"
-                alt="Portrait of Divyansh Shakya"
-                width={160}
-                height={160}
-                className="w-full h-full object-cover rounded-full"
-              />
-            </div>
+            <Magnetic strength={0.25} max={10}>
+              <motion.div
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.97 }}
+                className="relative w-24 h-24 sm:w-40 sm:h-40"
+              >
+                {/* rotating premium ring */}
+                <motion.div
+                  aria-hidden="true"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 9, repeat: Infinity, ease: "linear" }}
+                  className="absolute -inset-[3px] rounded-full bg-[conic-gradient(from_0deg,oklch(0.97_0_0/0.5),oklch(0.97_0_0/0.06)_30%,oklch(0.97_0_0/0.02)_50%,oklch(0.97_0_0/0.06)_70%,oklch(0.97_0_0/0.5))]"
+                />
+                <div className="absolute -inset-[3px] rounded-full bg-background/60 blur-[1px] -z-10" />
+                <div className="relative w-full h-full rounded-full overflow-hidden border border-white/15 bg-background p-[3px] shadow-[0_0_50px_-12px_oklch(0.97_0_0/0.45)]">
+                  <img
+                    src="/avatar.png"
+                    alt="Portrait of Divyansh Shakya"
+                    width={160}
+                    height={160}
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                </div>
+                {/* live dot */}
+                <span className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 flex h-3 w-3">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-white opacity-60 animate-ping" />
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-white border-2 border-background" />
+                </span>
+              </motion.div>
+            </Magnetic>
           </div>
 
           <div
@@ -208,17 +230,25 @@ export function Hero({ booted }: { booted: boolean }) {
             {tagline[1] ?? "— DevSecOps · Linux · Cloud."}
           </div>
 
-          <a
-            href="#projects"
-            className={`group inline-flex items-center gap-3 font-mono text-xs uppercase tracking-[0.3em] text-foreground ${booted ? "animate-fade-in [animation-delay:1400ms]" : "boot-gated"}`}
+          <Magnetic
+            strength={0.35}
+            max={14}
+            className={`${booted ? "animate-fade-in [animation-delay:1400ms]" : "boot-gated"}`}
           >
-            <span className="h-px w-12 bg-foreground/40 group-hover:w-20 transition-all duration-500" />
-            View Work
-            <ArrowUpRight
-              size={14}
-              className="transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-            />
-          </a>
+            <motion.a
+              href="#projects"
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              className="group inline-flex items-center gap-3 font-mono text-xs uppercase tracking-[0.3em] text-foreground"
+            >
+              <span className="h-px w-12 bg-foreground/40 group-hover:w-20 transition-all duration-500" />
+              View Work
+              <ArrowUpRight
+                size={14}
+                className="transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+              />
+            </motion.a>
+          </Magnetic>
 
           <div
             className={`font-mono text-[11px] sm:text-xs text-muted-foreground text-center sm:text-right ${booted ? "animate-fade-in [animation-delay:1500ms]" : "boot-gated"}`}

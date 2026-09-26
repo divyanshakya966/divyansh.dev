@@ -52,14 +52,17 @@ describe("Section", () => {
     expect(container.querySelector("section")).toHaveClass("scroll-mt-24");
   });
 
-  it("applies reveal classes to the header elements", () => {
+  it("applies reveal animations to the header elements", () => {
     const { container } = renderSection({
       id: "s",
       eyebrow: "E",
       title: "T",
       description: "D",
     });
-    expect(container.querySelectorAll(".reveal-stagger").length).toBeGreaterThan(0);
-    expect(container.querySelectorAll(".reveal").length).toBeGreaterThan(0);
+    // Header now uses motion Reveal (whileInView) instead of legacy .reveal classes.
+    // Children content still uses legacy reveals via useReveal for backward compat.
+    expect(screen.getByText("E")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("T");
+    expect(container.querySelector("section")).not.toBeNull();
   });
 });

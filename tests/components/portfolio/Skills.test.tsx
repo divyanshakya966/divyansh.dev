@@ -20,16 +20,29 @@ describe("Skills", () => {
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("The toolkit,");
   });
 
-  it("renders all four skill groups", () => {
+  it("renders all four skill groups as tabs", () => {
     render(<Skills />);
     GROUPS.forEach((g) =>
-      expect(screen.getByRole("heading", { level: 3, name: g })).toBeInTheDocument(),
+      expect(
+        screen.getByRole("tab", { name: new RegExp(g.replace(/[&]/g, "&")) }),
+      ).toBeInTheDocument(),
     );
+  });
+
+  it("shows first group skills and switches on tab click", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    render(<Skills />);
+    // First group active by default.
+    expect(screen.getAllByText("C/C++").length).toBeGreaterThan(0);
+    // Switch to Security tab reveals its skills.
+    await user.click(screen.getByRole("tab", { name: /Security/ }));
+    expect(await screen.findAllByText("TryHackMe")).not.toHaveLength(0);
   });
 
   it("renders sample skills from every group", () => {
     render(<Skills />);
-    SAMPLE_SKILLS.forEach((skill) => expect(screen.getByText(skill)).toBeInTheDocument());
+    SAMPLE_SKILLS.forEach((skill) => expect(screen.getAllByText(skill).length).toBeGreaterThan(0));
   });
 
   it("renders numbered group badges", () => {

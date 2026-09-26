@@ -47,7 +47,6 @@ export function usePublicContent(kind: ContentKind): ContentState {
 }
 
 type SettingsState = { settings: Record<string, string>; loading: boolean };
-
 /** Site settings with synchronous defaults (SSR/test safe). */
 export function useSiteSettings(): SettingsState {
   const [settings, setSettings] = useState<Record<string, string>>(DEFAULT_SETTINGS);
@@ -76,4 +75,36 @@ export function useSiteSettings(): SettingsState {
   }, []);
 
   return { settings, loading };
+}
+
+/**
+ * Published-presence check for conditional sections (research, blogs):
+ * true only once the API confirms ≥1 visible item. Fail-closed like the
+ * nav — avoids linking to sections that render null. Browser-cached, so
+ * Nav/Footer/Palette checks for the same kind share one response.
+ */
+export function useKindPresence(kind: ContentKind): boolean {
+  const [present, setPresent] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch(`/api/content?kind=${kind}`, { credentials: "same-origin" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { items?: unknown[] };
+        if (!cancelled && Array.isArray(data.items) && data.items.length > 0) {
+          setPresent(true);
+        }
+      } catch {
+        // fail closed — link stays hidden
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [kind]);
+
+  return present;
 }

@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { Github, Linkedin } from "lucide-react";
-import type { ReactNode } from "react";
 import { useSiteSettings } from "@/hooks/use-content";
 import { safeHref } from "@/lib/utils";
 
@@ -36,34 +37,117 @@ const links = [
   { name: "X", icon: <XIcon /> },
 ];
 
+const DOTS = [
+  { id: "about", label: "About" },
+  { id: "skills", label: "Skills" },
+  { id: "projects", label: "Projects" },
+  { id: "experience", label: "Experience" },
+  { id: "certifications", label: "Certifications" },
+  { id: "achievements", label: "Achievements" },
+  { id: "building", label: "Building" },
+  { id: "contact", label: "Contact" },
+];
+
 export function SocialPanel() {
   const { settings } = useSiteSettings();
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        setProgress(max > 0 ? window.scrollY / max : 0);
+      });
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  const activeDot = Math.min(
+    DOTS.length - 1,
+    Math.max(0, Math.round(progress * (DOTS.length - 1))),
+  );
+
+  const jump = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
-    <aside
+    <motion.aside
       aria-label="Social profiles"
+      initial={{ opacity: 0, x: -18 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 1.4, duration: 0.6, ease: "easeOut" }}
       className="hidden xl:flex fixed left-[max(1rem,env(safe-area-inset-left))] top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 rounded-2xl glass p-1.5"
     >
-      {links.map((l) => {
+      {links.map((l, i) => {
         const href =
           safeHref(settings[SETTING_KEYS[l.name]!] ?? "", DEFAULTS[l.name]!) || DEFAULTS[l.name]!;
         return (
-          <a
+          <motion.a
             key={l.name}
             href={href}
             target={href.startsWith("mailto:") ? undefined : "_blank"}
             rel={href.startsWith("mailto:") ? undefined : "noopener noreferrer"}
             aria-label={l.name}
             title={l.name}
-            className="group relative grid place-items-center h-9 w-9 rounded-lg bg-transparent text-muted-foreground hover:text-foreground hover:bg-foreground/6 transition"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 1.5 + i * 0.05, duration: 0.35 }}
+            whileHover={{ scale: 1.14, x: 2 }}
+            whileTap={{ scale: 0.88 }}
+            className="group relative grid place-items-center h-9 w-9 rounded-lg bg-transparent text-muted-foreground hover:text-foreground hover:bg-foreground/6 transition-colors"
           >
-            <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md glass px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md glass px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-foreground opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all">
               {l.name}
             </span>
             {l.icon}
-          </a>
+          </motion.a>
         );
       })}
-    </aside>
+
+      <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
+
+      {/* section dots — position-aware navigator */}
+      <div className="flex flex-col items-center gap-1.5 py-1" role="group" aria-label="Sections">
+        {DOTS.map((d, i) => {
+          const isActive = i === activeDot;
+          const isPassed = i < activeDot;
+          return (
+            <button
+              key={d.id}
+              onClick={() => jump(d.id)}
+              title={d.label}
+              aria-label={`Go to ${d.label}`}
+              className="grid place-items-center h-4 w-4 rounded-full"
+            >
+              <motion.span
+                animate={{ scale: isActive ? 1.5 : 1 }}
+                transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                className={`block h-1.5 w-1.5 rounded-full transition-colors ${
+                  isActive
+                    ? "bg-white shadow-[0_0_8px_oklch(0.97_0_0/0.9)]"
+                    : isPassed
+                      ? "bg-white/40 hover:bg-white/70"
+                      : "bg-white/15 hover:bg-white/50"
+                }`}
+              />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* scroll progress hairline */}
+      <div aria-hidden="true" className="h-8 w-px overflow-hidden rounded-full bg-white/10">
+        <div className="w-full origin-top bg-white/70" style={{ height: `${progress * 100}%` }} />
+      </div>
+    </motion.aside>
   );
 }
 
