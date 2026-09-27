@@ -10,9 +10,11 @@ This project is intentionally opinionated: it leans into a dark, terminal-inspir
 - A custom visual system with animated transitions, themed surfaces, and a tailored cursor treatment
 - A compact content structure designed to keep the presentation clear without exposing unnecessary implementation detail
 - A private admin area (`/admin`) where all portfolio sections, site settings,
-  and visibility are managed — backed by a Cloudflare D1 database
+  contact inbox, and visibility are managed — backed by a Cloudflare D1 database
 - Data-driven sections (certifications, projects, experience, research, blogs…)
   that render instantly from built-in seeds and stay in sync with admin edits
+- Command palette (`⌘K`), guest terminal, live resume (`/resume`) and RSS (`/rss.xml`)
+  generated from the same content
 
 ## Tech Stack
 
@@ -21,8 +23,11 @@ This project is intentionally opinionated: it leans into a dark, terminal-inspir
 - TanStack Start / TanStack Router / React Query
 - Vite
 - Tailwind CSS v4
+- Motion (scroll reveals, springs, gestures)
 - Cloudflare Workers / Wrangler
-- Cloudflare D1 (portfolio content, site settings, admin data)
+- Cloudflare D1 (portfolio content, site settings, admin data, contact inbox)
+- Cloudflare R2 (optional media uploads) + Turnstile (contact captcha)
+- Cloudflare Web Analytics (opt-in via admin token)
 - Resend (contact form delivery, admin verification email)
 - Self-hosted Inter + JetBrains Mono fonts via fontsource
 - PWA manifest and install icons
@@ -73,9 +78,9 @@ flowchart LR
 
 	subgraph Runtime[Runtime]
 		direction TB
-		Server[src/server.ts + src/start.ts + src/lib/error-page.ts]
-		Api[Api routes: robots.txt, sitemap.xml, contact, content, settings, admin]
-		Database[(Cloudflare D1 + migrations/)]
+  		Server[src/server.ts + src/start.ts + src/lib/error-page.ts]
+  		Api[Api routes: robots.txt, sitemap.xml, rss.xml, contact, content, settings, status, media, admin]
+  		Database[(Cloudflare D1 + migrations/)]
 		Cloudflare[Cloudflare Workers / SSR]
 		Server --> Api
 		Server --> Database

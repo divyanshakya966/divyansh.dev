@@ -99,24 +99,28 @@ Local `.dev.vars` fallback mode has no email channel, so it skips step-up
 | Section                                                                                     | Visibility                                                                                                                                                                                                   |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | About / Skills / Projects / Experience / Certifications / Achievements / Building / Contact | Visible while the section holds ≥1 visible item **and** its toggle is on (`Site settings`). Seeded with the current site content until D1 rows exist; hiding everything (or toggling off) hides the section. |
-| Research (`#research`), Blogs (`#blogs`)                                                    | **Hidden** until you publish ≥1 visible item from `/admin` (toggle must also be on).                                                                                                                         |
+| Research (`#research`), Blogs (`#blogs`), Kind words (`#testimonials`)                      | **Hidden** until you publish ≥1 visible item from `/admin` (toggle must also be on).                                                                                                                         |
 
-Nav links follow automatically: Research/Blogs appear once published; links for
-toggled-off sections disappear.
+Nav links follow automatically: Research/Blogs/Kind words appear once published; links for
+toggled-off sections disappear. The footer sitemap and `⌘K` palette follow the same rules —
+you can never link to a section that renders null. `meta.publish_at` (epoch ms) schedules an
+item to auto-publish later; drafts stay hidden via the eye toggle.
 
 ## Field map (what each field does per kind)
 
 - **Common:** title\*, subtitle, description, URL, image, tags (comma-separated),
   sort order, visible flag.
-- **project:** subtitle = tag chip, URL = repo, tags = stack,
-  meta `{"long": "dialog text", "demo": "live URL (optional)"}`.
+- **project:** subtitle = tag chip, URL = repo, tags = stack, image = screenshot,
+  meta `{"long": "dialog text", "demo": "live URL (optional)", "highlights": ["win", …]}`.
 - **experience:** subtitle = venue, description = body,
-  meta `{"when": "May 2026 – July 2026", "tag": "Open Source"}`.
+  meta `{"when": "May 2026 – July 2026", "tag": "Open Source", "bullets": ["did X", …]}`.
 - **achievement:** subtitle = sub-line, meta `{"icon": "trophy|award|badge|star"}`.
 - **skill:** title = group name, tags = skills. No meta.
 - **about:** title + description = card, meta `{"icon": "shield|cloud|code|terminal"}`.
 - **building:** meta.card `build|learn|now`. `learn` uses meta `{"lines": [...]}`;
   `now` uses meta `{"stats": [{"l": "…", "v": "…"}]}`.
+- **testimonial:** title = person, subtitle = role/org, description = quote, URL = profile.
+  No meta.
 - **certification/research/blog:** URL = verify/paper/article link. No meta.
 
 Meta is a JSON object (max 4000 chars); the editor validates it before saving.
@@ -162,8 +166,13 @@ Set up D1 before deploying — the fallback is local-only.
 
 - `GET /api/content?kind=…` — public, visible items only. Kinds: `certification`,
   `research`, `blog`, `project`, `experience`, `achievement`, `skill`, `about`,
-  `building`.
+  `building`, `testimonial`.
 - `GET /api/settings` — public merged site settings (cached).
+- `GET /rss.xml` — research + blogs feed. `GET /api/status` — public deploy sanity
+  (`{ ok, time, db, metaReady, counts }`).
+- `GET /api/admin/messages`, `DELETE /api/admin/messages/:id` — contact inbox
+  (reads need a session; deletes need step-up). `POST /api/admin/upload` — image
+  upload, needs the R2 bucket (see `docs/MEDIA_UPLOADS.md`). `GET /media/*` — serves uploads.
 - `GET /api/admin/status` — `{ db, hasAdmin, metaReady }` (setup + schema probe;
   if `metaReady` is false, apply migration 0002).
 - `POST /api/admin/login|logout`, `GET /api/admin/me`
@@ -172,7 +181,7 @@ Set up D1 before deploying — the fallback is local-only.
 - `GET|POST /api/admin/items?kind=all|…`, `PUT|DELETE /api/admin/items/:id`
 - `POST /api/admin/reorder` `{ kind, ids }`, `PUT /api/admin/password`
 - `POST /api/admin/seed-import` `{ kind }` — one-time import of that kind's
-  seeds into D1 (409 once rows exist; 400 for seedless kinds like research/blog)
+  seeds into D1 (409 once rows exist; 400 for seedless kinds like research/blog/testimonial)
 - `GET|PUT /api/admin/settings`, `DELETE /api/admin/settings/:key` (reset to default)
 
 ## Troubleshooting

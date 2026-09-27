@@ -2,7 +2,8 @@
 # The Cloudflare Vite plugin reads `.dev.vars` for local `bun run dev` runs.
 # Never commit the real `.dev.vars` (it is gitignored).
 
-# Required for the contact form to work (server returns 500 without these).
+# Required for the contact form to EMAIL you (without it, messages are still
+# stored and readable in /admin → Inbox, but nothing is sent).
 # Create an API key at https://resend.com/api-keys
 RESEND_API_KEY=
 
@@ -21,6 +22,11 @@ CONTACT_TO_EMAIL=
 # Optional — rate limiting (defaults match wrangler.jsonc: 5 requests / 10 min).
 CONTACT_RATE_LIMIT_MAX=5
 CONTACT_RATE_LIMIT_WINDOW_MS=600000
+
+# Optional — Cloudflare Turnstile captcha on the contact form. When set, the
+# matching site key must be saved in /admin → Site settings (turnstile_site_key);
+# when unset, the captcha is skipped entirely.
+# TURNSTILE_SECRET_KEY=
 
 # Optional — local admin fallback BEFORE D1 is set up (local dev only).
 # Production uses D1 `admin_users`. Generate values with: npm run admin:create
