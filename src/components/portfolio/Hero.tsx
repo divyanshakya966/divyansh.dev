@@ -91,13 +91,12 @@ export function Hero({ booted }: { booted: boolean }) {
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const runGlitchCycle = () => {
-      // Wait a random interval between 3 to 7 seconds before triggering a burst
+      // Ambient bursts on a random 3–7s cadence, each lasting 750ms.
       const nextDelay = 3000 + Math.random() * 4000;
 
       timeoutId = setTimeout(() => {
         setIsGlitching(true);
 
-        // Keep the glitch burst active for 750ms
         timeoutId = setTimeout(() => {
           setIsGlitching(false);
           runGlitchCycle();
@@ -105,7 +104,6 @@ export function Hero({ booted }: { booted: boolean }) {
       }, nextDelay);
     };
 
-    // Start first periodic glitch 2.2 seconds after boot completes
     const initTimeout = setTimeout(() => {
       runGlitchCycle();
     }, 2200);
@@ -148,7 +146,6 @@ export function Hero({ booted }: { booted: boolean }) {
                 whileTap={{ scale: 0.97 }}
                 className="relative w-24 h-24 sm:w-40 sm:h-40"
               >
-                {/* rotating premium ring */}
                 <motion.div
                   aria-hidden="true"
                   animate={{ rotate: 360 }}
@@ -157,15 +154,18 @@ export function Hero({ booted }: { booted: boolean }) {
                 />
                 <div className="absolute -inset-[3px] rounded-full bg-background/60 blur-[1px] -z-10" />
                 <div className="relative w-full h-full rounded-full overflow-hidden border border-white/15 bg-background p-[3px] shadow-[0_0_50px_-12px_oklch(0.97_0_0/0.45)]">
-                  <img
-                    src="/avatar.png"
-                    alt="Portrait of Divyansh Shakya"
-                    width={160}
-                    height={160}
-                    className="w-full h-full object-cover rounded-full"
-                  />
+                  <picture>
+                    <source srcSet="/avatar.webp" type="image/webp" />
+                    <img
+                      src="/avatar.png"
+                      alt="Portrait of Divyansh Shakya"
+                      width={160}
+                      height={160}
+                      fetchPriority="high"
+                      className="w-full h-full object-cover rounded-full"
+                    />
+                  </picture>
                 </div>
-                {/* live dot */}
                 <span className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 flex h-3 w-3">
                   <span className="absolute inline-flex h-full w-full rounded-full bg-white opacity-60 animate-ping" />
                   <span className="relative inline-flex h-3 w-3 rounded-full bg-white border-2 border-background" />

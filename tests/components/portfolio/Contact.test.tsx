@@ -36,7 +36,7 @@ afterEach(() => {
 describe("Contact", () => {
   it("renders the section and form fields", () => {
     renderContact();
-    expect(screen.getByText("10 / Contact")).toBeInTheDocument();
+    expect(screen.getByText("11 / Contact")).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toBeRequired();
     expect(screen.getByLabelText("Email")).toBeRequired();
     expect(screen.getByLabelText("Message")).toBeRequired();
@@ -82,7 +82,7 @@ describe("Contact", () => {
       message: "Hello there!",
       company: "",
     });
-    expect(await screen.findByText(/Message sent/)).toBeInTheDocument();
+    expect(await screen.findByText(/Message received/)).toBeInTheDocument();
   });
 
   it("shows an error toast when the request fails", async () => {

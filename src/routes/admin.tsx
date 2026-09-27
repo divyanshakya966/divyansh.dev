@@ -11,7 +11,16 @@ export const Route = createFileRoute("/admin")({
 });
 
 type Status = { db: boolean; hasAdmin: boolean; metaReady: boolean; stepUp: boolean };
-type Tab = ContentKind | "settings";
+type Tab = ContentKind | "settings" | "inbox";
+
+type InboxMessage = {
+  id: number;
+  name: string;
+  email: string;
+  message: string;
+  ip: string;
+  created_at: number;
+};
 
 const TABS: { kind: Tab; label: string; hint: string }[] = [
   {
@@ -44,6 +53,16 @@ const TABS: { kind: Tab; label: string; hint: string }[] = [
   },
   { kind: "blog", label: "Blogs", hint: "Hidden on the site until you publish 1 visible item." },
   {
+    kind: "testimonial",
+    label: "Kind words",
+    hint: "Hidden on the site until you publish 1 visible item. Title = person, subtitle = role.",
+  },
+  {
+    kind: "inbox",
+    label: "Inbox",
+    hint: "Contact-form messages, newest first. Stored before email dispatch.",
+  },
+  {
     kind: "settings",
     label: "Site settings",
     hint: "Hero text, contact details, footer link, section on/off.",
@@ -55,13 +74,14 @@ const KIND_META_HELP: Record<ContentKind, string> = {
   research: "No meta needed. URL = paper/read link.",
   blog: "No meta needed. URL = article link (optional).",
   project:
-    'meta: { "long": "dialog text", "demo": "https://live-url (optional)" }. URL = repo. Subtitle = tag. Tags = stack.',
+    'meta: { "long": "dialog text", "demo": "https://live-url (optional)", "highlights": ["win 1", "win 2"] }. URL = repo. Subtitle = tag. Tags = stack. Image = screenshot URL (optional).',
   experience:
-    'meta: { "when": "May 2026 – July 2026", "tag": "Open Source" }. Subtitle = venue. Tags = filter chips.',
+    'meta: { "when": "May 2026 – July 2026", "tag": "Open Source", "bullets": ["did X", "shipped Y"] }. Subtitle = venue. Tags = filter chips.',
   achievement: 'meta: { "icon": "trophy|award|badge|star" }. Subtitle = sub-line.',
   skill: "No meta needed. Title = group name, tags = skills.",
   about: 'meta: { "icon": "shield|cloud|code|terminal" }. Description = card body.',
   building: 'meta.card build|learn|now. learn: { "lines": [...] }. now: { "stats": [{"l","v"}] }.',
+  testimonial: "No meta needed. Title = person, subtitle = role/org, URL = profile (optional).",
 };
 
 const EMPTY_FORM = {
@@ -139,6 +159,7 @@ function AdminPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Password change
   const [currentPassword, setCurrentPassword] = useState("");
@@ -164,6 +185,11 @@ function AdminPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [requestingOtp, setRequestingOtp] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
+
+  // Contact inbox
+  const [messages, setMessages] = useState<InboxMessage[]>([]);
+  const [loadingInbox, setLoadingInbox] = useState(false);
+  const [confirmingMsgId, setConfirmingMsgId] = useState<number | null>(null);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -223,6 +249,18 @@ function AdminPage() {
     }
   }, []);
 
+  const refreshInbox = useCallback(async () => {
+    setLoadingInbox(true);
+    try {
+      const data = await api<{ items: InboxMessage[] }>("/api/admin/messages?limit=100");
+      setMessages(Array.isArray(data.items) ? data.items : []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load inbox.");
+    } finally {
+      setLoadingInbox(false);
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       await refreshStatus();
@@ -236,7 +274,11 @@ function AdminPage() {
     })();
   }, [refreshMe, refreshItems, refreshOtp, refreshSettings, refreshStatus]);
 
-  const isKindTab = tab !== "settings";
+  useEffect(() => {
+    if (tab === "inbox" && user) refreshInbox();
+  }, [tab, user, refreshInbox]);
+
+  const isKindTab = tab !== "settings" && tab !== "inbox";
   const activeKind = isKindTab ? (tab as ContentKind) : null;
   const visibleItems = useMemo(
     () =>
@@ -434,6 +476,47 @@ function AdminPage() {
       await refreshItems();
     } catch (e) {
       fail(e, "Delete failed.");
+    }
+  }
+
+  async function handleDeleteMessage(id: number) {
+    // Two-step inline confirm, same pattern as content deletes.
+    if (confirmingMsgId !== id) {
+      setConfirmingMsgId(id);
+      window.setTimeout(() => {
+        setConfirmingMsgId((cur) => (cur === id ? null : cur));
+      }, 4000);
+      return;
+    }
+    setConfirmingMsgId(null);
+    setError("");
+    try {
+      await api(`/api/admin/messages/${id}`, { method: "DELETE" });
+      setNotice("Message deleted.");
+      await refreshInbox();
+    } catch (e) {
+      fail(e, "Delete failed.");
+    }
+  }
+
+  async function handleImageUpload(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const data = await api<{ ok: true; url: string }>("/api/admin/upload", {
+        method: "POST",
+        headers: {},
+        body: fd,
+      });
+      setForm((f) => ({ ...f, image: data.url }));
+      setNotice("Image uploaded — save the item to keep it.");
+    } catch (e) {
+      fail(e, "Upload failed.");
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -903,7 +986,66 @@ function AdminPage() {
         </div>
         <p className="mt-2 text-xs font-mono text-muted-foreground">{activeTab.hint}</p>
 
-        {tab === "settings" ? (
+        {tab === "inbox" ? (
+          <div className="mt-4 glass rounded-2xl p-4 sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-semibold">
+                Inbox{" "}
+                <span className="font-mono text-xs text-muted-foreground">({messages.length})</span>
+              </h2>
+              <button
+                onClick={refreshInbox}
+                disabled={loadingInbox}
+                className="rounded-lg px-3 py-1.5 text-xs border border-border hover:bg-muted disabled:opacity-60"
+              >
+                {loadingInbox ? "Refreshing…" : "Refresh"}
+              </button>
+            </div>
+            {loadingInbox && messages.length === 0 ? (
+              <p className="mt-4 font-mono text-xs text-muted-foreground">Loading…</p>
+            ) : messages.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">
+                No messages yet. New contact-form submissions land here first, then email.
+              </p>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {messages.map((m) => (
+                  <li key={m.id} className="rounded-xl border border-border bg-background/40 p-4">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="font-semibold text-sm">{m.name}</span>{" "}
+                        <a
+                          href={`mailto:${m.email}`}
+                          className="font-mono text-xs text-muted-foreground hover:text-foreground break-all"
+                        >
+                          {m.email}
+                        </a>
+                      </div>
+                      <span className="font-mono text-[11px] text-muted-foreground shrink-0">
+                        {new Date(m.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                      {m.message}
+                    </p>
+                    <div className="mt-3">
+                      <button
+                        onClick={() => handleDeleteMessage(m.id)}
+                        className={`rounded-lg px-3 py-1.5 text-xs border transition-colors ${
+                          confirmingMsgId === m.id
+                            ? "border-red-500/50 bg-red-500/10 text-red-200"
+                            : "border-border hover:bg-muted"
+                        }`}
+                      >
+                        {confirmingMsgId === m.id ? "Confirm?" : "Delete"}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : tab === "settings" ? (
           <div className="mt-4 glass rounded-2xl p-4 sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-semibold">Site settings</h2>
@@ -1049,6 +1191,10 @@ function AdminPage() {
             </div>
             <p className="mt-2 font-mono text-[11px] text-muted-foreground">
               {activeKind ? KIND_META_HELP[activeKind] : ""}
+            </p>
+            <p className="mt-1 font-mono text-[11px] text-muted-foreground/70">
+              Scheduling: add "publish_at" (epoch ms) to meta to auto-publish later. Drafts stay
+              hidden via the eye toggle.
             </p>
 
             {loadingItems ? (
@@ -1281,6 +1427,24 @@ function AdminPage() {
                       placeholder="/… or https://…"
                       className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
+                    <span className="mt-2 flex flex-wrap items-center gap-2">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-muted">
+                        {uploading ? "Uploading…" : "Upload image (≤2 MB)"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                          disabled={uploading}
+                          className="sr-only"
+                          onChange={(e) => {
+                            void handleImageUpload(e.target.files?.[0]);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        Needs the R2 bucket (see docs/MEDIA_UPLOADS.md)
+                      </span>
+                    </span>
                   </label>
                   <label className="block sm:col-span-2">
                     <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">

@@ -45,7 +45,7 @@ export function Research() {
                   )}
                 </div>
                 <h3 className="mt-2 text-lg sm:text-xl font-semibold tracking-tight leading-snug decoration-white/40 underline-offset-4 group-hover:underline">
-                  {paper.title}
+                  <a href={`/reading/research/${paper.id}`}>{paper.title}</a>
                 </h3>
                 {paper.description && (
                   <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed line-clamp-2 max-w-3xl">
@@ -60,7 +60,7 @@ export function Research() {
                     target="_blank"
                     rel="noreferrer noopener"
                     aria-label={`Read ${paper.title}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 font-mono text-xs text-muted-foreground transition-all duration-300 hover:border-white hover:bg-white hover:text-black"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 font-mono text-xs text-muted-foreground transition-all duration-300 hover:border-white hover:bg-white hover:text-black touch-target"
                   >
                     Read
                     <ExternalLink size={12} />

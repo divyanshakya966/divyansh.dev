@@ -30,14 +30,31 @@ const CONDITIONAL_PROOF: {
   href: string;
   label: string;
   section: SectionId;
-  kind: "research" | "blog";
+  kind: "research" | "blog" | "testimonial";
 }[] = [
   { href: "#research", label: "Research", section: "research", kind: "research" },
   { href: "#blogs", label: "Blogs", section: "blogs", kind: "blog" },
+  { href: "#testimonials", label: "Kind words", section: "testimonials", kind: "testimonial" },
 ];
 
-function useLocalTime() {
-  return useISTClock();
+/** Isolated ticking pill — only this re-renders every second, not the footer. */
+function ClockPill() {
+  const time = useISTClock();
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="absolute inline-flex h-full w-full rounded-full bg-white opacity-75 animate-ping" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+      </span>
+      AVAILABLE · {time}
+    </span>
+  );
+}
+
+/** Isolated ticking bottom line — only this re-renders every second. */
+function ClockLine() {
+  const time = useISTClock();
+  return <span>{"// built with intent · Bhopal, IN · " + time}</span>;
 }
 
 export function Footer() {
@@ -47,18 +64,20 @@ export function Footer() {
   const linkedin = safeHref(settings.social_linkedin ?? "", DEFAULT_LINKEDIN) || DEFAULT_LINKEDIN;
   const emailRaw = (settings.contact_email ?? "").trim();
   const email = emailRaw.includes("@") ? emailRaw : DEFAULT_EMAIL;
-  const time = useLocalTime();
+  const footRef = useRef<HTMLElement>(null);
   // Never link to sections that render null (admin-hidden or, for
   // research/blogs, unpublished) — dead anchors break footer trust.
   const sitemap = SITEMAP.filter((l) => isSectionVisible(settings, l.section));
   const proof = PROOF.filter((l) => isSectionVisible(settings, l.section));
   const researchLive = useKindPresence("research");
   const blogsLive = useKindPresence("blog");
-  const conditionalProof = CONDITIONAL_PROOF.filter(
-    (l) =>
-      isSectionVisible(settings, l.section) && (l.kind === "research" ? researchLive : blogsLive),
-  );
-  const footRef = useRef<HTMLElement>(null);
+  const testimonialsLive = useKindPresence("testimonial");
+  const conditionalProof = CONDITIONAL_PROOF.filter((l) => {
+    if (!isSectionVisible(settings, l.section)) return false;
+    if (l.kind === "research") return researchLive;
+    if (l.kind === "blog") return blogsLive;
+    return testimonialsLive;
+  });
   const reduce = useReducedMotion();
   // Scrubbed rise: the watermark floats up as the footer enters,
   // settling back down when scrolling away.
@@ -96,12 +115,8 @@ export function Footer() {
               </a>
               !
             </p>
-            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 font-mono text-[11px] tabular-nums text-muted-foreground">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-white opacity-75 animate-ping" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
-              </span>
-              AVAILABLE · {time}
+            <div className="mt-4">
+              <ClockPill />
             </div>
             <div className="mt-5 flex gap-2">
               {[
@@ -115,7 +130,7 @@ export function Footer() {
                   target={href.startsWith("mailto:") ? undefined : "_blank"}
                   rel={href.startsWith("mailto:") ? undefined : "noreferrer noopener"}
                   aria-label={label}
-                  className="grid place-items-center h-9 w-9 rounded-lg border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:bg-white/[0.05] hover:text-foreground"
+                  className="grid place-items-center h-9 w-9 rounded-lg border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:bg-white/[0.05] hover:text-foreground touch-target"
                 >
                   <Icon size={15} />
                 </a>
@@ -200,6 +215,14 @@ export function Footer() {
                   ⌘K quick nav
                 </button>
               </li>
+              <li>
+                <button
+                  onClick={() => window.dispatchEvent(new Event("open-terminal"))}
+                  className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  ~/terminal
+                </button>
+              </li>
             </ul>
             <Magnetic strength={0.3} max={10} className="mt-5">
               <motion.button
@@ -227,7 +250,7 @@ export function Footer() {
 
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-white/10 py-5 font-mono text-[11px] tabular-nums text-muted-foreground">
           <div>© {new Date().getFullYear()} Divyansh Shakya</div>
-          <div>{"// built with intent · Bhopal, IN · " + time}</div>
+          <ClockLine />
         </div>
       </div>
       <div style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }} />

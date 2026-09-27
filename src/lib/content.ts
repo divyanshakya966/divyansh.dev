@@ -23,6 +23,7 @@ export const CONTENT_KINDS = [
   "skill",
   "about",
   "building",
+  "testimonial",
 ] as const;
 export type ContentKind = (typeof CONTENT_KINDS)[number];
 
@@ -706,7 +707,7 @@ export const SEED_BUILDING: ContentItem[] = [
   },
 ];
 
-/** All seeds by kind. Research + blogs intentionally start empty (hidden). */
+/** All seeds by kind. Research + blogs + testimonials start empty (hidden). */
 export const SEEDS: Record<ContentKind, ContentItem[]> = {
   certification: SEED_CERTIFICATIONS,
   research: [],
@@ -717,10 +718,22 @@ export const SEEDS: Record<ContentKind, ContentItem[]> = {
   skill: SEED_SKILLS,
   about: SEED_ABOUT,
   building: SEED_BUILDING,
+  testimonial: [],
 };
 
 export function sortContent(items: ContentItem[]): ContentItem[] {
   return [...items].sort(
     (a, b) => a.sort_order - b.sort_order || String(a.id).localeCompare(String(b.id)),
   );
+}
+
+/**
+ * Scheduled publishing: any item whose meta.publish_at (epoch ms) is in the
+ * future is treated as not-yet-live by public queries. Drafts stay
+ * is_visible=false; scheduling needs no schema change and works on old DBs.
+ */
+export function isLiveRow(item: ContentItem, now = Date.now()): boolean {
+  if (!item.is_visible) return false;
+  const at = item.meta?.publish_at;
+  return !(typeof at === "number" && Number.isFinite(at) && at > now);
 }

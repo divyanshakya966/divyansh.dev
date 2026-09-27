@@ -7,6 +7,7 @@ import {
   CONTENT_KINDS,
   SEEDS,
   isContentKind,
+  isLiveRow,
   rowToContentItem,
   sortContent,
   validateContentInput,
@@ -71,6 +72,7 @@ type D1Database = {
 
 type WorkerEnv = {
   DB?: D1Database;
+  R2_BUCKET?: R2Bucket;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   CONTACT_TO_EMAIL?: string;
@@ -80,11 +82,27 @@ type WorkerEnv = {
   ADMIN_PASSWORD_HASH?: string;
   ADMIN_PASSWORD_SALT?: string;
   ADMIN_EMAIL?: string;
+  TURNSTILE_SECRET_KEY?: string;
+};
+
+/** Minimal R2 typings so we don't need @cloudflare/workers-types. */
+type R2Bucket = {
+  put: (
+    key: string,
+    value: ArrayBuffer | Uint8Array | string,
+    options?: { httpMetadata?: Record<string, string> },
+  ) => Promise<unknown>;
+  get: (key: string) => Promise<{
+    body: ReadableStream | null;
+    httpMetadata?: { contentType?: string };
+  } | null>;
 };
 
 const CONTACT_API_PATH = "/api/contact";
 const CONTENT_API_PATH = "/api/content";
 const SETTINGS_API_PATH = "/api/settings";
+const STATUS_API_PATH = "/api/status";
+const RSS_PATH = "/rss.xml";
 const ADMIN_API_PREFIX = "/api/admin/";
 const ROBOTS_PATH = "/robots.txt";
 const SITEMAP_PATH = "/sitemap.xml";
@@ -355,6 +373,73 @@ function parseContactPayload(payload: unknown): ContactPayload | null {
   return { name, email, message };
 }
 
+type StoredMessage = {
+  id: number;
+  name: string;
+  email: string;
+  message: string;
+  ip: string;
+  created_at: number;
+};
+
+/* In-memory inbox for local dev before D1 is bound (capped). Not for production. */
+const fallbackMessages: StoredMessage[] = [];
+let fallbackMessageSeq = 1;
+
+async function storeContactMessage(
+  db: D1Database | null,
+  entry: Omit<StoredMessage, "id" | "created_at">,
+): Promise<void> {
+  const created_at = Date.now();
+  if (db) {
+    await db
+      .prepare(
+        "INSERT INTO contact_messages (name, email, message, ip, created_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .bind(entry.name, entry.email, entry.message, entry.ip, created_at)
+      .run();
+    return;
+  }
+  fallbackMessages.push({ ...entry, id: fallbackMessageSeq++, created_at });
+  if (fallbackMessages.length > 200) fallbackMessages.splice(0, fallbackMessages.length - 200);
+}
+
+async function listContactMessages(db: D1Database | null, limit: number): Promise<StoredMessage[]> {
+  if (db) {
+    const res = await db
+      .prepare(
+        "SELECT id, name, email, message, ip, created_at FROM contact_messages ORDER BY id DESC LIMIT ?",
+      )
+      .bind(limit)
+      .all<Record<string, unknown>>();
+    return res.results.map((r) => ({
+      id: Number(r.id ?? 0),
+      name: String(r.name ?? ""),
+      email: String(r.email ?? ""),
+      message: String(r.message ?? ""),
+      ip: String(r.ip ?? ""),
+      created_at: Number(r.created_at ?? 0),
+    }));
+  }
+  return [...fallbackMessages].sort((a, b) => b.id - a.id).slice(0, limit);
+}
+
+/** Cloudflare Turnstile check — enforced only when a secret is configured. */
+async function verifyTurnstile(secret: string, token: string, ip: string): Promise<boolean> {
+  try {
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret, response: token, remoteip: ip }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { success?: boolean };
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
+
 async function handleContactRequest(request: Request, env: unknown): Promise<Response> {
   if (request.method !== "POST") {
     return new Response("Method not allowed", {
@@ -378,14 +463,43 @@ async function handleContactRequest(request: Request, env: unknown): Promise<Res
   }
 
   const workerEnv = getWorkerEnv(env);
+
+  // Captcha gate (only when the owner configured Turnstile).
+  const turnstileSecret = getEnvValue(workerEnv, "TURNSTILE_SECRET_KEY");
+  if (turnstileSecret) {
+    const token =
+      typeof (body as Record<string, unknown>)["cf-turnstile-response"] === "string"
+        ? ((body as Record<string, unknown>)["cf-turnstile-response"] as string)
+        : "";
+    if (!token) {
+      return jsonResponse({ error: "Please complete the captcha." }, 400);
+    }
+    const human = await verifyTurnstile(turnstileSecret, token, getClientIp(request));
+    if (!human) {
+      return jsonResponse({ error: "Captcha verification failed. Try again." }, 403);
+    }
+  }
+
   if (isRateLimited(request, workerEnv)) {
     return jsonResponse({ error: "Too many requests. Please try again later." }, 429);
   }
 
+  // Persist first: no lead is ever lost to a mail-provider outage.
+  try {
+    await storeContactMessage(getDb(env), {
+      name: payload.name,
+      email: payload.email,
+      message: payload.message,
+      ip: getClientIp(request),
+    });
+  } catch (error) {
+    console.error("Contact store failed", error);
+  }
+
   const resendApiKey = getEnvValue(workerEnv, "RESEND_API_KEY");
   if (!resendApiKey) {
-    console.error("Missing RESEND_API_KEY");
-    return jsonResponse({ error: "Email service is not configured" }, 500);
+    // Stored above — the admin inbox is the delivery channel in dev.
+    return jsonResponse({ ok: true, emailed: false });
   }
 
   const toEmail = getEnvValue(workerEnv, "CONTACT_TO_EMAIL") || DEFAULT_TO_EMAIL;
@@ -409,10 +523,281 @@ async function handleContactRequest(request: Request, env: unknown): Promise<Res
   if (!resendResponse.ok) {
     const errorText = await resendResponse.text();
     console.error("Resend API error", resendResponse.status, errorText);
-    return jsonResponse({ error: "Failed to send email" }, 502);
+    // Message is already stored — report honestly so the UI can say so.
+    return jsonResponse({ ok: true, emailed: false });
   }
 
+  return jsonResponse({ ok: true, emailed: true });
+}
+
+async function handleAdminMessages(request: Request, env: unknown): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (user instanceof Response) return user;
+
+  if (request.method === "GET") {
+    const url = new URL(request.url);
+    const rawLimit = Number(url.searchParams.get("limit") ?? 50);
+    const limit =
+      Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(200, Math.trunc(rawLimit)) : 50;
+    try {
+      return jsonResponse({ items: await listContactMessages(getDb(env), limit) });
+    } catch (error) {
+      // Fresh DBs predate migration 0004 — report empty instead of 500.
+      console.error("Inbox read failed", error);
+      return jsonResponse({ items: [] });
+    }
+  }
+
+  return new Response("Method not allowed", {
+    status: 405,
+    headers: { allow: "GET", ...securityHeaders() },
+  });
+}
+
+async function handleAdminMessageDelete(
+  request: Request,
+  env: unknown,
+  idStr: string,
+): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (user instanceof Response) return user;
+  const id = parseId(idStr);
+  if (id === null) return jsonResponse({ error: "Invalid id." }, 400);
+  const grant = await requireGrant(request, env, user);
+  if (grant instanceof Response) return grant;
+
+  const db = getDb(env);
+  if (db) {
+    try {
+      await db.prepare("DELETE FROM contact_messages WHERE id = ?").bind(id).run();
+      return jsonResponse({ ok: true });
+    } catch (error) {
+      console.error("Inbox delete failed", error);
+      return jsonResponse({ error: "Failed to delete message." }, 500);
+    }
+  }
+  const idx = fallbackMessages.findIndex((m) => m.id === id);
+  if (idx === -1) return jsonResponse({ error: "Not found." }, 404);
+  fallbackMessages.splice(idx, 1);
   return jsonResponse({ ok: true });
+}
+
+/* ---------------- Media uploads (optional R2 bucket) ---------------- */
+
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+const UPLOAD_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+};
+
+function getBucket(env: unknown): R2Bucket | null {
+  const workerEnv = getWorkerEnv(env);
+  const bucket = workerEnv.R2_BUCKET;
+  if (bucket && typeof bucket.put === "function" && typeof bucket.get === "function") {
+    return bucket;
+  }
+  return null;
+}
+
+function randomSuffix(): string {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function handleAdminUpload(request: Request, env: unknown): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (user instanceof Response) return user;
+  const grant = await requireGrant(request, env, user);
+  if (grant instanceof Response) return grant;
+
+  const bucket = getBucket(env);
+  if (!bucket) {
+    return jsonResponse(
+      { error: "Media bucket not bound. See docs/MEDIA_UPLOADS.md to set up R2." },
+      501,
+    );
+  }
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return jsonResponse({ error: "Invalid multipart body." }, 400);
+  }
+  // Duck-typed file check: `instanceof File` breaks across realms
+  // (jsdom tests, workers), so validate shape instead.
+  const part = form.get("file");
+  const file =
+    part && typeof part === "object" && typeof (part as File).arrayBuffer === "function"
+      ? (part as File)
+      : null;
+  if (!file) {
+    return jsonResponse({ error: "No file attached (field name: file)." }, 400);
+  }
+  const fileType = typeof file.type === "string" ? file.type : "";
+  const fileSize = typeof file.size === "number" ? file.size : 0;
+  const ext = UPLOAD_EXT[fileType];
+  if (!ext) {
+    return jsonResponse({ error: "Only PNG, JPEG, WebP, GIF or AVIF images." }, 400);
+  }
+  if (fileSize <= 0 || fileSize > MAX_UPLOAD_BYTES) {
+    return jsonResponse({ error: "File must be non-empty and ≤ 2 MB." }, 400);
+  }
+
+  const key = `uploads/${user.id}/${Date.now()}-${randomSuffix()}.${ext}`;
+  try {
+    await bucket.put(key, await file.arrayBuffer(), {
+      httpMetadata: {
+        contentType: fileType,
+        cacheControl: "public, max-age=31536000, immutable",
+      },
+    });
+  } catch (error) {
+    console.error("R2 upload failed", error);
+    return jsonResponse({ error: "Upload failed." }, 500);
+  }
+  return jsonResponse({ ok: true, url: `/media/${key}` }, 201);
+}
+
+async function handleMediaRequest(request: Request, env: unknown, key: string): Promise<Response> {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: { allow: "GET, HEAD", ...securityHeaders() },
+    });
+  }
+  // Locked to the uploads prefix: no traversal, no absolute paths.
+  if (!/^uploads\/[A-Za-z0-9][A-Za-z0-9/_.-]{0,200}$/.test(key) || key.includes("..")) {
+    return jsonResponse({ error: "Not found." }, 404);
+  }
+  const bucket = getBucket(env);
+  if (!bucket) return jsonResponse({ error: "Not found." }, 404);
+  let obj: { body: ReadableStream | null; httpMetadata?: { contentType?: string } } | null;
+  try {
+    obj = await bucket.get(key);
+  } catch (error) {
+    console.error("R2 read failed", error);
+    return jsonResponse({ error: "Not found." }, 404);
+  }
+  if (!obj || !obj.body) return jsonResponse({ error: "Not found." }, 404);
+  // Buffer through the reader instead of streaming the foreign object
+  // straight into Response: R2/test doubles may hand us a cross-realm
+  // ReadableStream that Response brand-checks reject. Uploads are ≤2 MB,
+  // so one buffered copy is always cheap (and identical on Workers).
+  let bytes: Uint8Array<ArrayBuffer>;
+  try {
+    const reader = (obj.body as ReadableStream<Uint8Array>).getReader();
+    const chunks: Uint8Array<ArrayBuffer>[] = [];
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value as Uint8Array<ArrayBuffer>);
+    }
+    const total = chunks.reduce((n, c) => n + c.length, 0);
+    bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      bytes.set(c, offset);
+      offset += c.length;
+    }
+  } catch (error) {
+    console.error("R2 read failed", error);
+    return jsonResponse({ error: "Not found." }, 404);
+  }
+  return new Response(bytes, {
+    headers: {
+      "content-type": obj.httpMetadata?.contentType ?? "application/octet-stream",
+      "cache-control": "public, max-age=31536000, immutable",
+      ...securityHeaders(),
+    },
+  });
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+async function rssResponse(env: unknown): Promise<Response> {
+  const db = getDb(env);
+  const kinds: ContentKind[] = ["research", "blog"];
+  const entries: { title: string; link: string; description: string; date?: string }[] = [];
+  for (const kind of kinds) {
+    const { items } = await queryVisibleContent(db, kind);
+    for (const item of items) {
+      const ts = item.updated_at ?? item.created_at;
+      const absolute = /^https?:\/\//i.test(item.url) ? item.url : `${site.url}/#${kind}`;
+      entries.push({
+        title: item.title,
+        link: absolute,
+        description: item.description || item.subtitle,
+        date: typeof ts === "number" ? new Date(ts).toUTCString() : undefined,
+      });
+    }
+  }
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>${escapeXml(site.title)}</title>
+    <link>${site.url}/</link>
+    <description>${escapeXml(site.description)}</description>
+    <language>en-in</language>
+${entries
+  .slice(0, 40)
+  .map(
+    (e) => `    <item>
+      <title>${escapeXml(e.title)}</title>
+      <link>${escapeXml(e.link)}</link>
+      <description>${escapeXml(e.description)}</description>
+${e.date ? `      <pubDate>${e.date}</pubDate>\n` : ""}    </item>`,
+  )
+  .join("\n")}
+  </channel>
+</rss>
+`;
+  return new Response(body, {
+    headers: {
+      "content-type": "application/rss+xml; charset=utf-8",
+      "cache-control": "public, max-age=0, must-revalidate",
+      ...securityHeaders(),
+    },
+  });
+}
+
+async function handleStatusRequest(env: unknown): Promise<Response> {
+  const db = getDb(env);
+  let metaReady = true;
+  const counts: Record<string, number> = {};
+  if (db) {
+    try {
+      await db.prepare("SELECT meta FROM content_items LIMIT 1").first();
+    } catch {
+      metaReady = false;
+    }
+    try {
+      // FakeD1-compatible shape: kind column only, tallied in JS.
+      const res = await db.prepare("SELECT kind FROM content_items").all<Record<string, unknown>>();
+      for (const row of res.results) {
+        const k = typeof row.kind === "string" ? row.kind : "unknown";
+        counts[k] = (counts[k] ?? 0) + 1;
+      }
+    } catch (error) {
+      console.error("Status counts failed", error);
+    }
+  }
+  return jsonResponse(
+    { ok: true, time: Date.now(), db: Boolean(db), metaReady, counts },
+    200,
+    publicCacheHeaders(),
+  );
 }
 
 /* ---------------- Content + Admin APIs ---------------- */
@@ -483,10 +868,12 @@ async function queryVisibleContent(
   // Single-statement snapshot so visible rows and totals can't straddle
   // D1 replication states and briefly report an empty section.
   const snapshot = (rows: ContentItem[]): { items: ContentItem[]; source: ContentSource } => {
-    const visible = sortContent(rows.filter((r) => r.is_visible));
+    // isLiveRow folds in scheduled publishing (meta.publish_at in future)
+    // alongside the visibility flag — one place for every source.
+    const visible = sortContent(rows.filter((r) => isLiveRow(r)));
     if (visible.length > 0) return { items: visible, source: "db" };
     if (rows.length > 0) return { items: [], source: "db" }; // admin hid everything: respect it
-    const seeds = SEEDS[kind].filter((s) => s.is_visible);
+    const seeds = SEEDS[kind].filter((s) => isLiveRow(s));
     return seeds.length > 0 ? { items: seeds, source: "seed" } : { items: [], source: "empty" };
   };
 
@@ -1555,6 +1942,19 @@ async function handleAdminRequest(request: Request, env: unknown): Promise<Respo
   if (path === "/api/admin/items" && (request.method === "GET" || request.method === "POST")) {
     return handleAdminItems(request, env, url);
   }
+  if (path === "/api/admin/messages" && request.method === "GET") {
+    return handleAdminMessages(request, env);
+  }
+  const messageMatch = path.match(/^\/api\/admin\/messages\/([^/]+)$/);
+  if (messageMatch && request.method === "DELETE") {
+    let idStr: string;
+    try {
+      idStr = decodeURIComponent(messageMatch[1]!);
+    } catch {
+      return jsonResponse({ error: "Invalid id encoding." }, 400);
+    }
+    return handleAdminMessageDelete(request, env, idStr);
+  }
   if (path === "/api/admin/reorder" && request.method === "POST") {
     return handleAdminReorder(request, env);
   }
@@ -1566,6 +1966,9 @@ async function handleAdminRequest(request: Request, env: unknown): Promise<Respo
   }
   if (path === "/api/admin/password" && (request.method === "PUT" || request.method === "POST")) {
     return handleAdminPassword(request, env);
+  }
+  if (path === "/api/admin/upload" && request.method === "POST") {
+    return handleAdminUpload(request, env);
   }
   const itemMatch = path.match(/^\/api\/admin\/items\/([^/]+)$/);
   if (itemMatch && (request.method === "PUT" || request.method === "DELETE")) {
@@ -1655,6 +2058,27 @@ export default {
       }
       if (url.pathname === SITEMAP_PATH) {
         return sitemapResponse();
+      }
+      if (url.pathname === RSS_PATH) {
+        return await rssResponse(env);
+      }
+      if (url.pathname === STATUS_API_PATH) {
+        if (request.method !== "GET") {
+          return new Response("Method not allowed", {
+            status: 405,
+            headers: { allow: "GET", ...securityHeaders() },
+          });
+        }
+        return await handleStatusRequest(env);
+      }
+      if (url.pathname === "/media" || url.pathname.startsWith("/media/")) {
+        let key: string;
+        try {
+          key = decodeURIComponent(url.pathname.slice("/media/".length));
+        } catch {
+          return jsonResponse({ error: "Invalid key encoding." }, 400);
+        }
+        return await handleMediaRequest(request, env, key);
       }
       if (url.pathname === CONTACT_API_PATH) {
         return await handleContactRequest(request, env);

@@ -24,6 +24,7 @@ export const SECTION_IDS = [
   "building",
   "research",
   "blogs",
+  "testimonials",
   "contact",
 ] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
@@ -38,6 +39,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   building: "Currently building",
   research: "Research",
   blogs: "Blogs",
+  testimonials: "Kind words",
   contact: "Contact",
 };
 
@@ -146,6 +148,20 @@ export const SETTING_DEFS: SettingDef[] = [
     type: "text",
     def: "https://github.com/divyanshakya966/divyansh.dev",
   },
+  {
+    key: "turnstile_site_key",
+    label: "Cloudflare Turnstile site key (contact captcha)",
+    type: "text",
+    def: "",
+    hint: "Empty = captcha off (dev). Set alongside TURNSTILE_SECRET_KEY to enforce.",
+  },
+  {
+    key: "analytics_token",
+    label: "Cloudflare Web Analytics token",
+    type: "text",
+    def: "",
+    hint: "Empty = analytics off. Paste the beacon token from the dashboard.",
+  },
   ...SECTION_IDS.map(
     (id): SettingDef => ({
       key: `section_${id}_visible`,
@@ -153,7 +169,7 @@ export const SETTING_DEFS: SettingDef[] = [
       type: "boolean",
       def: "1",
       hint:
-        id === "research" || id === "blogs"
+        id === "research" || id === "blogs" || id === "testimonials"
           ? "Also needs at least one visible item to appear."
           : undefined,
     }),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Section } from "./Section";
 import { Magnetic } from "./Magnetic";
@@ -10,13 +10,87 @@ import { useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
 import { safeHref } from "@/lib/utils";
 
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: HTMLElement,
+        options: {
+          sitekey: string;
+          theme?: "light" | "dark" | "auto";
+          size?: "normal" | "compact";
+          callback?: (token: string) => void;
+          "expired-callback"?: () => void;
+          "error-callback"?: () => void;
+        },
+      ) => string;
+      reset: (widgetId?: string) => void;
+      remove: (widgetId?: string) => void;
+    };
+    onTurnstileLoad?: () => void;
+  }
+}
+
 const DEFAULT_EMAIL = "divyanshakya.dev@gmail.com";
 const DEFAULT_GITHUB = "https://github.com/divyanshakya966";
 const DEFAULT_LINKEDIN = "https://www.linkedin.com/in/divyanshakya966";
+const TURNSTILE_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+
+/** Cloudflare Turnstile widget — renders only when a site key is configured. */
+function Turnstile({ siteKey, onToken }: { siteKey: string; onToken: (t: string) => void }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const tokenRef = useRef(onToken);
+  tokenRef.current = onToken;
+
+  useEffect(() => {
+    let widgetId: string | undefined;
+    let cancelled = false;
+    const renderWidget = () => {
+      if (cancelled || !boxRef.current || !window.turnstile || widgetId !== undefined) return;
+      widgetId = window.turnstile.render(boxRef.current, {
+        sitekey: siteKey,
+        theme: "dark",
+        size: "compact",
+        callback: (t) => tokenRef.current(t),
+        "expired-callback": () => tokenRef.current(""),
+        "error-callback": () => tokenRef.current(""),
+      });
+    };
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      const existing = document.querySelector<HTMLScriptElement>(`script[src="${TURNSTILE_SRC}"]`);
+      if (!existing) {
+        const s = document.createElement("script");
+        s.src = TURNSTILE_SRC;
+        s.async = true;
+        s.defer = true;
+        s.onload = renderWidget;
+        document.head.appendChild(s);
+      } else {
+        existing.addEventListener("load", renderWidget, { once: true });
+        // Script may already be loaded with render pending.
+        window.setTimeout(renderWidget, 500);
+      }
+    }
+    return () => {
+      cancelled = true;
+      try {
+        if (widgetId !== undefined) window.turnstile?.remove(widgetId);
+      } catch {
+        // widget teardown is best-effort
+      }
+    };
+  }, [siteKey]);
+
+  return <div ref={boxRef} className="min-h-[65px]" aria-label="Spam check" />;
+}
 
 export function Contact() {
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaKey, setCaptchaKey] = useState(0);
   const { settings } = useSiteSettings();
   const emailRaw = (settings.contact_email ?? "").trim();
   const email = emailRaw.includes("@") ? emailRaw : DEFAULT_EMAIL;
@@ -26,6 +100,7 @@ export function Contact() {
   const blurb =
     settings.contact_blurb?.trim() ||
     "Open to Cybersecurity and DevSecOps internships, hackathons and meaningful OSS work.";
+  const turnstileKey = (settings.turnstile_site_key ?? "").trim();
 
   if (!isSectionVisible(settings, "contact")) return null;
 
@@ -50,11 +125,17 @@ export function Contact() {
     const form = e.currentTarget;
     const formData = new FormData(form);
 
+    if (turnstileKey && !captchaToken) {
+      toast.error("Please complete the captcha first.");
+      return;
+    }
+
     const payload = {
       name: String(formData.get("name") ?? "").trim(),
       email: String(formData.get("email") ?? "").trim(),
       message: String(formData.get("message") ?? "").trim(),
       company: String(formData.get("company") ?? "").trim(),
+      ...(turnstileKey ? { "cf-turnstile-response": captchaToken } : {}),
     };
 
     setSending(true);
@@ -76,11 +157,13 @@ export function Contact() {
         if (response.status === 429) {
           throw new Error(detail || "Too many requests — please try again later.");
         }
-        throw new Error("Unable to send message right now");
+        throw new Error(detail || "Unable to send message right now");
       }
 
       form.reset();
-      toast.success("Message sent — I'll get back to you soon.");
+      setCaptchaToken("");
+      setCaptchaKey((k) => k + 1);
+      toast.success("Message received — I'll get back to you soon.");
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Couldn't send message. Please try again in a moment.",
@@ -93,7 +176,7 @@ export function Contact() {
   return (
     <Section
       id="contact"
-      eyebrow="10 / Contact"
+      eyebrow="11 / Contact"
       title={
         <>
           Let's <span className="text-gradient">build</span> something.
@@ -124,7 +207,7 @@ export function Contact() {
                 required
                 maxLength={5000}
                 rows={5}
-                className="mt-2 w-full rounded-xl bg-background/40 border border-border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition resize-none"
+                className="mt-2 w-full rounded-xl bg-background/40 border border-border px-4 py-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition resize-none"
                 placeholder="Tell me about the role, hackathon, or project..."
               />
             </div>
@@ -137,6 +220,9 @@ export function Contact() {
               aria-hidden="true"
             />
             <div className="flex flex-wrap items-center gap-3 pt-2">
+              {turnstileKey && (
+                <Turnstile key={captchaKey} siteKey={turnstileKey} onToken={setCaptchaToken} />
+              )}
               <Magnetic strength={0.25} max={10}>
                 <motion.button
                   type="submit"
@@ -239,7 +325,7 @@ function Field({
         type={type}
         required={required}
         maxLength={name === "email" ? 254 : 120}
-        className="mt-2 w-full rounded-xl bg-background/40 border border-border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition"
+        className="mt-2 w-full rounded-xl bg-background/40 border border-border px-4 py-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition"
       />
     </div>
   );

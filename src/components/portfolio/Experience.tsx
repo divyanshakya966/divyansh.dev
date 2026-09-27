@@ -1,9 +1,21 @@
-import { useRef } from "react";
-import { motion, useReducedMotion, useScroll, useSpring } from "motion/react";
+import { useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring } from "motion/react";
+import { ChevronDown } from "lucide-react";
 import { Section } from "./Section";
 import { Reveal } from "./Reveal";
 import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
+import type { ContentItem } from "@/lib/content";
+
+function bulletsOf(item: ContentItem): string[] {
+  const raw = (item.meta ?? {}).bullets;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((b): b is string => typeof b === "string")
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
 
 export function Experience() {
   const { items } = usePublicContent("experience");
@@ -17,6 +29,7 @@ export function Experience() {
     offset: ["start 0.75", "end 0.55"],
   });
   const fill = useSpring(scrollYProgress, { stiffness: 110, damping: 26, mass: 0.4 });
+  const [openId, setOpenId] = useState<string | null>(null);
 
   if (!isSectionVisible(settings, "experience") || items.length === 0) return null;
 
@@ -48,6 +61,8 @@ export function Experience() {
               typeof meta.tag === "string" && meta.tag.trim()
                 ? meta.tag
                 : (it.tags[0] ?? it.subtitle);
+            const bullets = bulletsOf(it);
+            const open = openId === String(it.id);
             return (
               <Reveal key={String(it.id)} variant={i % 2 === 0 ? "left" : "right"} delay={0}>
                 <li className="group relative grid sm:grid-cols-2 gap-6 sm:gap-12 rounded-2xl p-2 -m-2 transition-colors hover:bg-white/[0.02]">
@@ -73,6 +88,62 @@ export function Experience() {
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {it.description}
                     </p>
+                    {(bullets.length > 0 || it.tags.length > 0) && (
+                      <div className={`mt-3 flex ${i % 2 === 0 ? "" : "sm:justify-end"}`}>
+                        <button
+                          onClick={() => setOpenId(open ? null : String(it.id))}
+                          aria-expanded={open}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground touch-target"
+                        >
+                          {open ? "Less" : "Details"}
+                          <motion.span
+                            animate={{ rotate: open ? 180 : 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="grid place-items-center"
+                          >
+                            <ChevronDown size={12} />
+                          </motion.span>
+                        </button>
+                      </div>
+                    )}
+                    <AnimatePresence initial={false}>
+                      {open && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                          className="overflow-hidden"
+                        >
+                          {bullets.length > 0 && (
+                            <ul className="mt-3 space-y-1.5 text-sm text-muted-foreground">
+                              {bullets.map((b) => (
+                                <li key={b} className="flex items-start gap-2 leading-relaxed">
+                                  <span aria-hidden="true" className="mt-0.5 text-white/50">
+                                    ▸
+                                  </span>
+                                  {b}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {it.tags.length > 0 && (
+                            <div
+                              className={`mt-3 flex flex-wrap gap-1.5 ${i % 2 === 0 ? "" : "sm:justify-end"}`}
+                            >
+                              {it.tags.map((t) => (
+                                <span
+                                  key={t}
+                                  className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+                                >
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </li>
               </Reveal>

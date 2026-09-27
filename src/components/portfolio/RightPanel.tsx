@@ -70,7 +70,6 @@ export function RightPanel() {
 
       <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
 
-      {/* circular scroll progress */}
       <div
         className="relative grid place-items-center h-9 w-9"
         title="Scroll progress"
@@ -103,7 +102,6 @@ export function RightPanel() {
         </span>
       </div>
 
-      {/* back to top — appears after scrolling */}
       <AnimatePresence>
         {showTop && (
           <motion.a

@@ -25,7 +25,6 @@ export function Magnetic({
   const onMove = (e: MouseEvent) => {
     const el = ref.current;
     if (!el) return;
-    // Skip magnetic pull on touch / coarse pointers.
     if (window.matchMedia("(pointer: coarse)").matches) return;
     const r = el.getBoundingClientRect();
     const relX = e.clientX - (r.left + r.width / 2);

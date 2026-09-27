@@ -78,7 +78,6 @@ export function Cursor() {
 
   return (
     <>
-      {/* click ripples — one-shot, no persistent trailer */}
       {ripples.map((r) => (
         <motion.span
           key={r.id}
@@ -114,7 +113,6 @@ export function Cursor() {
             strokeLinejoin="round"
             strokeLinecap="round"
           />
-          {/* tip glint */}
           <circle cx="5.6" cy="4.2" r="1.4" fill="currentColor" opacity="0.9" />
         </svg>
       </motion.div>

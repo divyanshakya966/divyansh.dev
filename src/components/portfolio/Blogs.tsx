@@ -39,7 +39,7 @@ export function Blogs() {
                   <span className="truncate">{post.subtitle || "Note"}</span>
                 </div>
                 <h3 className="mt-1.5 text-base sm:text-lg font-semibold tracking-tight leading-snug decoration-white/40 underline-offset-4 group-hover:underline">
-                  {post.title}
+                  <a href={`/reading/blog/${post.id}`}>{post.title}</a>
                 </h3>
                 {post.description && (
                   <p className="mt-1 text-sm text-muted-foreground leading-relaxed line-clamp-2 max-w-3xl">
@@ -53,7 +53,7 @@ export function Blogs() {
                   target="_blank"
                   rel="noreferrer noopener"
                   aria-label={`Read ${post.title}`}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 font-mono text-xs text-muted-foreground transition-all duration-300 hover:border-white hover:bg-white hover:text-black"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 font-mono text-xs text-muted-foreground transition-all duration-300 hover:border-white hover:bg-white hover:text-black touch-target"
                 >
                   Read
                   <ExternalLink size={12} />

@@ -34,5 +34,14 @@
 			"database_id": "39e28a4a-591e-4474-b7b6-c6f0033fd03b",
 			"remote": true
 		}
-	]
+	],
+	// Optional media bucket for /admin image uploads. Uncomment AFTER creating
+	// it (`npx wrangler r2 bucket create divyansh-media`) — deploying with a
+	// binding to a nonexistent bucket fails. See docs/MEDIA_UPLOADS.md.
+	// "r2_buckets": [
+	// 	{
+	// 		"binding": "R2_BUCKET",
+	// 		"bucket_name": "divyansh-media"
+	// 	}
+	// ]
 }

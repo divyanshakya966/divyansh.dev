@@ -21,10 +21,21 @@ type Project = {
   description: string;
   long: string;
   stack: string[];
+  highlights: string[];
+  image?: string;
   github?: string;
   demo?: string;
   tag: string;
 };
+
+function stringList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((s): s is string => typeof s === "string")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
 
 function toProject(item: ContentItem): Project {
   const meta = item.meta ?? {};
@@ -32,12 +43,15 @@ function toProject(item: ContentItem): Project {
   // meta.demo is free-form admin input — only render safe http(s) URLs.
   const demoRaw = typeof meta.demo === "string" ? meta.demo : "";
   const demo = safeHref(demoRaw) || undefined;
+  const image = safeHref(item.image) || undefined;
   return {
     id: String(item.id),
     title: item.title,
     description: item.description,
     long,
     stack: item.tags,
+    highlights: stringList(meta.highlights),
+    image,
     github: item.url || undefined,
     demo,
     tag: item.subtitle,
@@ -79,12 +93,12 @@ export function Projects() {
                 }
               }}
               onClick={() => setOpen(p)}
-              className="group relative grid grid-cols-[auto_1fr_auto] items-start sm:items-center gap-3 sm:gap-6 border-b border-white/10 px-2 sm:px-4 py-5 sm:py-6 cursor-pointer outline-none transition-colors duration-300 hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:ring-2 focus-visible:ring-ring"
+              className="group relative grid grid-cols-[auto_1fr] sm:grid-cols-[auto_1fr_auto] items-start sm:items-center gap-x-3 gap-y-3 sm:gap-6 border-b border-white/10 px-2 sm:px-4 py-5 sm:py-6 cursor-pointer outline-none transition-colors duration-300 hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <span className="pt-1 sm:pt-0 font-mono text-xs text-muted-foreground tabular-nums">
+              <span className="row-start-1 pt-1 sm:pt-0 font-mono text-xs text-muted-foreground tabular-nums">
                 {String(i + 1).padStart(2, "0")}
               </span>
-              <div className="min-w-0">
+              <div className="col-start-2 row-start-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                     {p.tag}
@@ -111,7 +125,24 @@ export function Projects() {
                   ))}
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 pt-1 sm:pt-0">
+              <div className="col-start-2 row-start-2 sm:col-start-3 sm:row-start-1 flex flex-wrap items-center gap-2 justify-self-start sm:justify-self-auto sm:pt-0">
+                {p.demo && (
+                  <a
+                    href={p.demo}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`View live demo of ${p.title}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 font-mono text-xs font-medium text-black transition-all duration-300 hover:shadow-glow hover:scale-[1.04] active:scale-[0.97] touch-target"
+                  >
+                    <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                    </span>
+                    Live
+                    <ArrowUpRight size={13} />
+                  </a>
+                )}
                 {p.github && (
                   <a
                     href={p.github}
@@ -119,21 +150,9 @@ export function Projects() {
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     aria-label="GitHub"
-                    className="grid place-items-center h-8 w-8 rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-white/15 hover:bg-white/[0.05] hover:text-foreground"
+                    className="grid place-items-center h-8 w-8 rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-white/15 hover:bg-white/[0.05] hover:text-foreground touch-target"
                   >
                     <Github size={14} />
-                  </a>
-                )}
-                {p.demo && (
-                  <a
-                    href={p.demo}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label="Live"
-                    className="grid place-items-center h-8 w-8 rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-white/15 hover:bg-white/[0.05] hover:text-foreground"
-                  >
-                    <ExternalLink size={14} />
                   </a>
                 )}
                 <span className="grid place-items-center h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-all duration-300 group-hover:border-white/30 group-hover:bg-white group-hover:text-black">
@@ -148,7 +167,7 @@ export function Projects() {
         ))}
       </div>
       <p className="mt-4 font-mono text-[11px] text-muted-foreground">
-        {"~/ click a row for details — GitHub icons open source directly"}
+        {"~/ click a row for details — Live pills open the hosted demo directly"}
       </p>
 
       <Dialog open={!!open} onOpenChange={(isOpen) => setOpen(isOpen ? open : null)}>
@@ -169,6 +188,31 @@ export function Projects() {
             <DialogDescription className="text-left text-sm text-muted-foreground leading-relaxed">
               {open?.long}
             </DialogDescription>
+            {open?.image && (
+              <div className="overflow-hidden rounded-xl border border-white/10">
+                <img
+                  src={open.image}
+                  alt={`${open.title} preview`}
+                  loading="lazy"
+                  className="w-full object-cover"
+                />
+              </div>
+            )}
+            {(open?.highlights?.length ?? 0) > 0 && (
+              <ul className="space-y-1.5">
+                {(open?.highlights ?? []).map((h) => (
+                  <li
+                    key={h}
+                    className="flex items-start gap-2 text-sm text-muted-foreground leading-relaxed"
+                  >
+                    <span aria-hidden="true" className="mt-0.5 text-white/60">
+                      ▸
+                    </span>
+                    {h}
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className="flex flex-wrap gap-1.5">
               {(open?.stack ?? []).map((s) => (
                 <span
@@ -180,24 +224,30 @@ export function Projects() {
               ))}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
-              {open?.github && (
-                <a
-                  href={open.github}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm glass hover:bg-muted"
-                >
-                  <Github size={14} /> Source
-                </a>
-              )}
               {open?.demo && (
                 <a
                   href={open.demo}
                   target="_blank"
                   rel="noreferrer noopener"
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm bg-gradient-to-r from-cyan to-violet text-primary-foreground"
+                  aria-label={`View live demo of ${open.title}`}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition-all hover:shadow-glow hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  <ExternalLink size={14} /> Live
+                  <span className="relative flex h-2 w-2" aria-hidden="true">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" />
+                  </span>
+                  View live
+                  <ExternalLink size={14} />
+                </a>
+              )}
+              {open?.github && (
+                <a
+                  href={open.github}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm glass hover:bg-muted"
+                >
+                  <Github size={14} /> Source
                 </a>
               )}
             </div>

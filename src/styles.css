@@ -894,6 +894,12 @@
     .matrix-rain {
       display: none;
     }
+    .animate-marquee,
+    .animate-float,
+    .animate-pulse-slow,
+    .animate-ping {
+      animation: none !important;
+    }
     .glitch-triggered,
     .glitch-hoverable:hover {
       animation: none !important;
@@ -972,6 +978,12 @@
     .portfolio-cursor-pointer {
       display: none;
     }
+    /* 44px minimum touch targets for icon-only / pill controls.
+       Desktop layout untouched — this only ever grows hit areas on touch. */
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
   }
 }
 
@@ -981,6 +993,23 @@
 @supports (height: 100svh) {
   .min-h-viewport {
     min-height: 100svh;
+  }
+}
+
+@media print {
+  /* Resume route: light paper, no chrome. */
+  .resume-page {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .resume-page .text-muted-foreground {
+    color: #444 !important;
+  }
+  .resume-page .text-foreground {
+    color: #000 !important;
+  }
+  .resume-page .border-white\/10 {
+    border-color: #ddd !important;
   }
 }
 .max-h-85-viewport {

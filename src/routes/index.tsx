@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Nav } from "@/components/portfolio/Nav";
-import { CommandPalette } from "@/components/portfolio/CommandPalette";
+import { AnalyticsBeacon } from "@/components/portfolio/AnalyticsBeacon";
+import { Terminal } from "@/components/portfolio/Terminal";
+import { useHireMeEgg } from "@/hooks/use-hire-me-egg";
 import { SocialPanel } from "@/components/portfolio/SocialPanel";
 import { RightPanel } from "@/components/portfolio/RightPanel";
 import { BackgroundFX } from "@/components/portfolio/BackgroundFX";
@@ -17,11 +19,17 @@ import { Achievements } from "@/components/portfolio/Achievements";
 import { Certifications } from "@/components/portfolio/Certifications";
 import { Research } from "@/components/portfolio/Research";
 import { Blogs } from "@/components/portfolio/Blogs";
+import { Testimonials } from "@/components/portfolio/Testimonials";
 import { Building } from "@/components/portfolio/Building";
 import { Contact } from "@/components/portfolio/Contact";
 import { Footer } from "@/components/portfolio/Footer";
 import { useReveal } from "@/hooks/use-reveal";
 import { site } from "@/lib/site";
+
+// Below-the-fold interactive shell — split out so first paint stays lean.
+const CommandPalette = lazy(() =>
+  import("@/components/portfolio/CommandPalette").then((m) => ({ default: m.CommandPalette })),
+);
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -44,6 +52,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  useHireMeEgg();
   const [bootClosing, setBootClosing] = useState(false);
   const [bootDone, setBootDone] = useState(false);
   const handleBootCloseStart = useCallback(() => setBootClosing(true), []);
@@ -75,7 +84,11 @@ function Index() {
     <main id="main-content" tabIndex={-1} className="relative min-h-screen outline-none">
       <BackgroundFX />
       <Cursor />
-      <CommandPalette />
+      <AnalyticsBeacon />
+      <Suspense fallback={null}>
+        <CommandPalette />
+      </Suspense>
+      <Terminal />
       {!bootDone && <IntroBoot onCloseStart={handleBootCloseStart} onDone={handleBootDone} />}
       <Nav />
       <SocialPanel />
@@ -90,6 +103,7 @@ function Index() {
       <Building />
       <Research />
       <Blogs />
+      <Testimonials />
       <Contact />
       <Footer />
       <Toaster richColors position="bottom-right" />

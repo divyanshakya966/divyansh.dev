@@ -28,6 +28,9 @@ export function BackgroundFX() {
     let drops: number[] = [];
     const fontSize = 14;
     const glyphs = "01░▒▓<>/$_{}[]=+*#01アァカサタナハマヤラワ".split("");
+    // Interaction state: cursor repulsion + click shockwaves.
+    const mouse = { x: -9999, y: -9999 };
+    const bursts: { x: number; y: number; t: number }[] = [];
 
     const setup = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -49,14 +52,37 @@ export function BackgroundFX() {
       ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
       ctx.font = `${fontSize}px JetBrains Mono, ui-monospace, monospace`;
+      const now = performance.now();
+      for (let b = bursts.length - 1; b >= 0; b--) {
+        if (now - bursts[b]!.t > 1400) bursts.splice(b, 1);
+      }
 
       for (let i = 0; i < drops.length; i++) {
         const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
         const x = i * fontSize;
         const y = drops[i] * fontSize;
-        if (Math.random() > 0.975) ctx.fillStyle = "rgba(230, 230, 230, 0.85)";
+        let ox = 0;
+        let oy = 0;
+        let lit = false;
+        const mdx = x - mouse.x;
+        const mdy = y - mouse.y;
+        const mdist = Math.hypot(mdx, mdy);
+        if (mdist < 110 && mdist > 0.5) {
+          const push = (1 - mdist / 110) * 12;
+          ox = (mdx / mdist) * push;
+          oy = (mdy / mdist) * push;
+          lit = true;
+        }
+        // Click shockwaves expand as bright rings.
+        for (const burst of bursts) {
+          const r = (now - burst.t) * 0.35;
+          const d = Math.hypot(x - burst.x, y - burst.y);
+          if (Math.abs(d - r) < 42) lit = true;
+        }
+        if (lit) ctx.fillStyle = "rgba(235, 235, 235, 0.9)";
+        else if (Math.random() > 0.975) ctx.fillStyle = "rgba(230, 230, 230, 0.85)";
         else ctx.fillStyle = `rgba(200, 200, 200, ${0.06 + Math.random() * 0.08})`;
-        ctx.fillText(ch, x, y);
+        ctx.fillText(ch, x + ox, y + oy);
 
         if (y > window.innerHeight && Math.random() > 0.972) drops[i] = 0;
         drops[i] += 0.45 + Math.random() * 0.35;
@@ -79,9 +105,21 @@ export function BackgroundFX() {
 
     const onResize = () => setup();
     window.addEventListener("resize", onResize);
+    const onTrack = (e: MouseEvent) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    };
+    window.addEventListener("mousemove", onTrack, { passive: true });
+    const onBurst = (e: MouseEvent) => {
+      bursts.push({ x: e.clientX, y: e.clientY, t: performance.now() });
+      if (bursts.length > 6) bursts.shift();
+    };
+    window.addEventListener("click", onBurst);
     return () => {
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("mousemove", onTrack);
+      window.removeEventListener("click", onBurst);
       stop();
     };
   }, []);

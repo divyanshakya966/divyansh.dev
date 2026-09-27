@@ -6,11 +6,15 @@ import { useKindPresence, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible, type SectionId } from "@/lib/settings";
 import { safeHref } from "@/lib/utils";
 
+import { CONTENT_KINDS, type ContentItem, type ContentKind } from "@/lib/content";
+
 type Action = {
   id: string;
   group: string;
   label: string;
   hint?: string;
+  /** Extra searchable text (not displayed). */
+  search?: string;
   icon: typeof ArrowUpRight;
   run: () => void;
 };
@@ -30,9 +34,40 @@ const LINKS: { href: string; label: string; section: SectionId }[] = [
   { href: "#contact", label: "Contact", section: "contact" },
 ];
 
-const CONDITIONAL_LINKS: { href: string; label: string; kind: "research" | "blog" }[] = [
+const KIND_SECTION: Record<ContentKind, string> = {
+  certification: "certifications",
+  research: "research",
+  blog: "blogs",
+  project: "projects",
+  experience: "experience",
+  achievement: "achievements",
+  skill: "skills",
+  about: "about",
+  building: "building",
+  testimonial: "testimonials",
+};
+
+const KIND_LABEL: Record<ContentKind, string> = {
+  certification: "Certification",
+  research: "Research",
+  blog: "Post",
+  project: "Project",
+  experience: "Experience",
+  achievement: "Achievement",
+  skill: "Skill",
+  about: "About",
+  building: "Status",
+  testimonial: "Kind word",
+};
+
+const CONDITIONAL_LINKS: {
+  href: string;
+  label: string;
+  kind: "research" | "blog" | "testimonial";
+}[] = [
   { href: "#research", label: "Research", kind: "research" },
   { href: "#blogs", label: "Blogs", kind: "blog" },
+  { href: "#testimonials", label: "Kind words", kind: "testimonial" },
 ];
 
 function go(href: string) {
@@ -49,6 +84,7 @@ export function CommandPalette() {
   const { settings } = useSiteSettings();
   const researchLive = useKindPresence("research");
   const blogsLive = useKindPresence("blog");
+  const testimonialsLive = useKindPresence("testimonial");
 
   const emailRaw = (settings.contact_email ?? "").trim();
   const email = emailRaw.includes("@") ? emailRaw : DEFAULT_EMAIL;
@@ -58,10 +94,54 @@ export function CommandPalette() {
     () => LINKS.filter((l) => isSectionVisible(settings, l.section)),
     [settings],
   );
-  const conditionalLinks = useMemo(
-    () => CONDITIONAL_LINKS.filter((l) => (l.kind === "research" ? researchLive : blogsLive)),
-    [researchLive, blogsLive],
-  );
+  const conditionalLinks = useMemo(() => {
+    const live = { research: researchLive, blog: blogsLive, testimonial: testimonialsLive };
+    return CONDITIONAL_LINKS.filter((l) => live[l.kind]);
+  }, [researchLive, blogsLive, testimonialsLive]);
+
+  // Full-text index across all public content, loaded lazily on first open
+  // (responses are browser-cached; capped so the palette stays instant).
+  const [contentActions, setContentActions] = useState<Action[]>([]);
+  const indexLoaded = useRef(false);
+  useEffect(() => {
+    if (!open || indexLoaded.current) return;
+    indexLoaded.current = true;
+    (async () => {
+      const out: Action[] = [];
+      await Promise.all(
+        CONTENT_KINDS.map(async (kind) => {
+          try {
+            const res = await fetch(`/api/content?kind=${kind}`, {
+              credentials: "same-origin",
+            });
+            if (!res.ok) return;
+            const data = (await res.json()) as { items?: ContentItem[] };
+            if (!Array.isArray(data.items)) return;
+            for (const item of data.items.slice(0, 12)) {
+              const absolute = /^https?:\/\//i.test(item.url ?? "");
+              out.push({
+                id: `content-${kind}-${String(item.id)}`,
+                group: KIND_LABEL[kind],
+                label: item.title,
+                hint: item.subtitle || `#${KIND_SECTION[kind]}`,
+                search: [item.subtitle, item.description, (item.tags ?? []).join(" ")]
+                  .filter(Boolean)
+                  .join(" "),
+                icon: ArrowUpRight,
+                run: () => {
+                  if (absolute) window.open(item.url, "_blank", "noopener");
+                  else go(`#${KIND_SECTION[kind]}`);
+                },
+              });
+            }
+          } catch {
+            // search degrades to navigation actions
+          }
+        }),
+      );
+      setContentActions(out.slice(0, 80));
+    })();
+  }, [open]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -71,15 +151,8 @@ export function CommandPalette() {
         setOpen((v) => !v);
       } else if (e.key === "Escape") {
         setOpen(false);
-      } else if (e.key === "/" && !open) {
-        const t = document.activeElement as HTMLElement | null;
-        const typing =
-          t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
-        if (!typing) {
-          e.preventDefault();
-          setOpen(true);
-        }
       }
+      // NOTE: no "/" shortcut — it would hijack Firefox quick-find.
     };
     const onCustom = () => setOpen(true);
     window.addEventListener("keydown", onKey);
@@ -168,8 +241,17 @@ export function CommandPalette() {
         icon: Terminal,
         run: () => window.scrollTo({ top: 0, behavior: "smooth" }),
       },
+      {
+        id: "terminal",
+        group: "Actions",
+        label: "Open terminal",
+        hint: "guest shell",
+        icon: Terminal,
+        run: () => window.dispatchEvent(new Event("open-terminal")),
+      },
+      ...contentActions,
     ],
-    [visibleLinks, conditionalLinks, email, github, linkedin],
+    [visibleLinks, conditionalLinks, contentActions, email, github, linkedin],
   );
 
   const filtered = useMemo(() => {
@@ -179,7 +261,8 @@ export function CommandPalette() {
       (a) =>
         a.label.toLowerCase().includes(needle) ||
         a.group.toLowerCase().includes(needle) ||
-        (a.hint ?? "").toLowerCase().includes(needle),
+        (a.hint ?? "").toLowerCase().includes(needle) ||
+        (a.search ?? "").toLowerCase().includes(needle),
     );
   }, [actions, q]);
 
@@ -199,7 +282,7 @@ export function CommandPalette() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[90] grid place-items-start justify-center px-4 pt-[14vh] bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[90] grid place-items-start justify-center px-4 pt-[14svh] bg-black/60 backdrop-blur-sm"
           onClick={() => setOpen(false)}
           role="presentation"
         >
@@ -232,7 +315,7 @@ export function CommandPalette() {
                   }
                 }}
                 placeholder="Type a command or search…  (~/about, ~/projects)"
-                className="w-full bg-transparent py-3.5 text-sm outline-none placeholder:text-muted-foreground/70"
+                className="w-full bg-transparent py-3.5 text-base sm:text-sm outline-none placeholder:text-muted-foreground/70"
               />
               <kbd className="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                 ESC

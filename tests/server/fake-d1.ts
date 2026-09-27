@@ -32,9 +32,11 @@ export class FakeD1 {
   settings: Row[] = [];
   grants: Row[] = [];
   otps: Row[] = [];
+  messages: Row[] = [];
   seq = 1;
   useq = 1;
   oseq = 1;
+  mseq = 1;
 
   prepare(sql: string) {
     return new FakeStatement(this, sql);
@@ -81,6 +83,12 @@ export class FakeD1 {
   handleAll(sql: string, p: unknown[]): Row[] {
     if (sql.includes("FROM site_settings")) {
       return [...this.settings];
+    }
+    if (sql.includes("FROM contact_messages")) {
+      const limit = typeof p[0] === "number" ? p[0] : 200;
+      return [...this.messages]
+        .sort((a, b) => Number(b.id) - Number(a.id))
+        .slice(0, Math.max(0, limit));
     }
     if (sql.includes("FROM admin_otps WHERE user_id")) {
       // Throttle list: rows created within the window.
@@ -228,6 +236,22 @@ export class FakeD1 {
     }
     if (sql.startsWith("INSERT INTO admin_grants")) {
       this.grants.push({ token_hash: p[0], user_id: p[1], expires_at: p[2], created_at: p[3] });
+      return { success: true };
+    }
+    if (sql.startsWith("INSERT INTO contact_messages")) {
+      const id = this.mseq++;
+      this.messages.push({
+        id,
+        name: p[0],
+        email: p[1],
+        message: p[2],
+        ip: p[3],
+        created_at: p[4],
+      });
+      return { success: true, meta: { last_row_id: id } };
+    }
+    if (sql.startsWith("DELETE FROM contact_messages WHERE id")) {
+      this.messages = this.messages.filter((m) => m.id !== p[0]);
       return { success: true };
     }
     if (sql.startsWith("INSERT INTO site_settings")) {

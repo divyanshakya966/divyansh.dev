@@ -114,7 +114,6 @@ export function SocialPanel() {
 
       <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
 
-      {/* section dots — position-aware navigator */}
       <div className="flex flex-col items-center gap-1.5 py-1" role="group" aria-label="Sections">
         {DOTS.map((d, i) => {
           const isActive = i === activeDot;
@@ -143,7 +142,6 @@ export function SocialPanel() {
         })}
       </div>
 
-      {/* scroll progress hairline */}
       <div aria-hidden="true" className="h-8 w-px overflow-hidden rounded-full bg-white/10">
         <div className="w-full origin-top bg-white/70" style={{ height: `${progress * 100}%` }} />
       </div>

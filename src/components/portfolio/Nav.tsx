@@ -263,14 +263,14 @@ export function Nav() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 aria-label="Open command palette"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-lg glass px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground hover:border-white/25 transition-colors"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-lg glass px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground hover:border-white/25 transition-colors touch-target"
               >
                 <span className="text-xs">⌘</span>K
               </motion.button>
 
               <motion.button
                 ref={menuBtnRef}
-                className="lg:hidden grid place-items-center h-9 w-9 rounded-lg glass"
+                className="lg:hidden grid place-items-center h-9 w-9 rounded-lg glass touch-target"
                 onClick={() => setOpen((v) => !v)}
                 whileTap={{ scale: 0.88 }}
                 aria-label="Menu"
@@ -308,7 +308,7 @@ export function Nav() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
               transition={{ type: "spring", stiffness: 340, damping: 32 }}
-              className="fixed inset-x-3 top-24 bottom-6 z-40 flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#0b0b0d]/95 shadow-elegant lg:hidden"
+              className="fixed inset-x-3 z-40 flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#0b0b0d]/95 shadow-elegant lg:hidden top-[max(5.5rem,calc(env(safe-area-inset-top)+4.5rem))] bottom-[max(1.5rem,env(safe-area-inset-bottom))]"
             >
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
                 <span>~/ navigate</span>

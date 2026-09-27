@@ -59,7 +59,7 @@ export function Certifications() {
                   target="_blank"
                   rel="noreferrer noopener"
                   aria-label={`Verify ${cert.title}`}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 font-mono text-xs text-muted-foreground transition-all duration-300 hover:border-white hover:bg-white hover:text-black"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 font-mono text-xs text-muted-foreground transition-all duration-300 hover:border-white hover:bg-white hover:text-black touch-target"
                 >
                   <BadgeCheck size={13} />
                   Verify
