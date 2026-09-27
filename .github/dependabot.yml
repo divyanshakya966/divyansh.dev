@@ -9,6 +9,11 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    # TypeScript 7 breaks typescript-eslint v8 (see closed PR #5) — revisit
+    # only alongside a typescript-eslint v9 migration, tested locally first.
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
