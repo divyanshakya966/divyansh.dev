@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Projects } from "@/components/portfolio/Projects";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const PROJECT_TITLES = [
   "AegisStack",
@@ -71,5 +75,46 @@ describe("Projects", () => {
     const source = dialog.querySelector('a[href="https://github.com/divyanshakya966/AegisStack"]');
     expect(source).not.toBeNull();
     expect(source).toHaveAttribute("target", "_blank");
+  });
+
+  it("shows both Live pill and Source link when a demo URL exists", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 99,
+              kind: "project",
+              title: "Demo Project",
+              subtitle: "Demo",
+              description: "Has both links.",
+              url: "https://github.com/divyanshakya966/demo",
+              image: "",
+              tags: ["React"],
+              meta: { demo: "https://demo.example.com" },
+              sort_order: 1,
+              is_visible: true,
+            },
+          ],
+          source: "db",
+        }),
+      }),
+    );
+    const user = userEvent.setup();
+    render(<Projects />);
+    const live = await screen.findByRole("link", { name: "View live demo of Demo Project" });
+    expect(live).toHaveAttribute("href", "https://demo.example.com");
+    expect(live).toHaveAttribute("target", "_blank");
+
+    await user.click(screen.getByRole("heading", { name: "Demo Project" }));
+    const dialog = await screen.findByRole("dialog");
+    const dialogLive = dialog.querySelector('a[href="https://demo.example.com"]');
+    expect(dialogLive).not.toBeNull();
+    expect(dialogLive).toHaveAttribute("target", "_blank");
+    expect(
+      dialog.querySelector('a[href="https://github.com/divyanshakya966/demo"]'),
+    ).not.toBeNull();
   });
 });

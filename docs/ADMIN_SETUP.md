@@ -110,8 +110,10 @@ item to auto-publish later; drafts stay hidden via the eye toggle.
 
 - **Common:** title\*, subtitle, description, URL, image, tags (comma-separated),
   sort order, visible flag.
-- **project:** subtitle = tag chip, URL = repo, tags = stack, image = screenshot,
-  meta `{"long": "dialog text", "demo": "live URL (optional)", "highlights": ["win", …]}`.
+- **project:** subtitle = tag chip, URL = repo (Source button),
+  **Live demo URL field** = hosted app (Live pill on every row + dialog),
+  tags = stack, image = screenshot,
+  meta `{"long": "dialog text", "highlights": ["win", …]}`.
 - **experience:** subtitle = venue, description = body,
   meta `{"when": "May 2026 – July 2026", "tag": "Open Source", "bullets": ["did X", …]}`.
 - **achievement:** subtitle = sub-line, meta `{"icon": "trophy|award|badge|star"}`.

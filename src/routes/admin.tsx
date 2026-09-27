@@ -1,6 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SEEDS, metaString, type ContentItem, type ContentKind } from "@/lib/content";
+import {
+  SEEDS,
+  extractProjectDemo,
+  injectProjectDemo,
+  metaString,
+  type ContentItem,
+  type ContentKind,
+} from "@/lib/content";
 import { SETTING_DEFS } from "@/lib/settings";
 
 export const Route = createFileRoute("/admin")({
@@ -74,7 +81,7 @@ const KIND_META_HELP: Record<ContentKind, string> = {
   research: "No meta needed. URL = paper/read link.",
   blog: "No meta needed. URL = article link (optional).",
   project:
-    'meta: { "long": "dialog text", "demo": "https://live-url (optional)", "highlights": ["win 1", "win 2"] }. URL = repo. Subtitle = tag. Tags = stack. Image = screenshot URL (optional).',
+    'meta: { "long": "dialog text", "highlights": ["win 1", "win 2"] }. Live demo URL has its own field above. URL = repo. Subtitle = tag. Tags = stack. Image = screenshot URL (optional).',
   experience:
     'meta: { "when": "May 2026 – July 2026", "tag": "Open Source", "bullets": ["did X", "shipped Y"] }. Subtitle = venue. Tags = filter chips.',
   achievement: 'meta: { "icon": "trophy|award|badge|star" }. Subtitle = sub-line.',
@@ -89,6 +96,7 @@ const EMPTY_FORM = {
   subtitle: "",
   description: "",
   url: "",
+  demo: "",
   image: "",
   tags: "",
   meta: "",
@@ -399,14 +407,18 @@ function AdminPage() {
       return;
     }
     setEditingId(item.id);
+    // Projects edit the live URL in a dedicated field; the rest of meta
+    // stays raw JSON below.
+    const demoSplit = item.kind === "project" ? extractProjectDemo(item.meta) : null;
     setForm({
       title: item.title,
       subtitle: item.subtitle,
       description: item.description,
       url: item.url,
+      demo: demoSplit?.demo ?? "",
       image: item.image,
       tags: item.tags.join(", "),
-      meta: metaString(item.meta),
+      meta: demoSplit ? demoSplit.rest : metaString(item.meta),
       sort_order: String(item.sort_order),
       is_visible: item.is_visible,
     });
@@ -423,7 +435,7 @@ function AdminPage() {
       url: form.url.trim(),
       image: form.image.trim(),
       tags: form.tags,
-      meta: form.meta.trim(),
+      meta: activeKind === "project" ? injectProjectDemo(form.meta, form.demo) : form.meta.trim(),
       sort_order: Number(form.sort_order) || 0,
       is_visible: form.is_visible,
     };
@@ -1360,7 +1372,7 @@ function AdminPage() {
                   </label>
                   <label className="block">
                     <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                      URL
+                      {activeKind === "project" ? "Source URL (repo)" : "URL"}
                     </span>
                     <input
                       value={form.url}
@@ -1369,7 +1381,29 @@ function AdminPage() {
                       placeholder="https://…"
                       className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
+                    {activeKind === "project" && (
+                      <span className="mt-1 block font-mono text-[11px] text-muted-foreground">
+                        GitHub repo → “Source” button on the site.
+                      </span>
+                    )}
                   </label>
+                  {activeKind === "project" && (
+                    <label className="block">
+                      <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                        Live demo URL
+                      </span>
+                      <input
+                        value={form.demo}
+                        onChange={(e) => setForm({ ...form, demo: e.target.value })}
+                        inputMode="url"
+                        placeholder="https://your-hosted-app…"
+                        className="mt-1.5 w-full rounded-lg bg-background/60 border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                      <span className="mt-1 block font-mono text-[11px] text-muted-foreground">
+                        Hosted project → “Live” pill on every row + dialog.
+                      </span>
+                    </label>
+                  )}
                   <label className="block sm:col-span-2">
                     <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
                       Description

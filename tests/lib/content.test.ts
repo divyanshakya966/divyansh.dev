@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   SEEDS,
   SEED_CERTIFICATIONS,
+  extractProjectDemo,
+  injectProjectDemo,
   isContentKind,
   parseMeta,
   rowToContentItem,
@@ -124,5 +126,26 @@ describe("content model", () => {
       { ...SEED_CERTIFICATIONS[0]!, sort_order: 1 },
     ]);
     expect(sorted[0]?.title).toContain("SEC1");
+  });
+
+  it("splits the demo URL out of project meta for the admin field", () => {
+    expect(extractProjectDemo({ demo: "https://demo.app", long: "x" })).toEqual({
+      demo: "https://demo.app",
+      rest: '{"long":"x"}',
+    });
+    expect(extractProjectDemo({})).toEqual({ demo: "", rest: "" });
+    expect(extractProjectDemo(undefined)).toEqual({ demo: "", rest: "" });
+  });
+
+  it("merges the admin demo field back into project meta", () => {
+    expect(injectProjectDemo("", "https://demo.app")).toEqual({ demo: "https://demo.app" });
+    expect(injectProjectDemo("", "")).toEqual({});
+    expect(injectProjectDemo('{"long":"x"}', "https://demo.app")).toEqual({
+      long: "x",
+      demo: "https://demo.app",
+    });
+    expect(injectProjectDemo('{"long":"x","demo":"https://old.app"}', "")).toEqual({ long: "x" });
+    // Invalid JSON passes through so server validation reports it as-is.
+    expect(injectProjectDemo("{oops", "https://demo.app")).toBe("{oops");
   });
 });

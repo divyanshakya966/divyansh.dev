@@ -95,6 +95,36 @@ export function metaString(meta: unknown): string {
   return JSON.stringify(meta ?? {});
 }
 
+/**
+ * Project link fields: the repo URL lives in `url`, the hosted live URL in
+ * `meta.demo`. The admin form edits demo as a dedicated field, so these
+ * helpers split/merge it against the raw meta JSON the editor shows.
+ */
+export function extractProjectDemo(meta: unknown): { demo: string; rest: string } {
+  const parsed = parseMeta(meta);
+  const demo = typeof parsed.demo === "string" ? parsed.demo : "";
+  const { demo: _dropped, ...rest } = parsed;
+  return { demo, rest: metaString(rest) };
+}
+
+export function injectProjectDemo(metaStr: string, demo: string): string | Record<string, unknown> {
+  const clean = demo.trim();
+  const trimmed = metaStr.trim();
+  if (!trimmed) return clean ? { demo: clean } : {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    // Leave invalid JSON untouched — server validation reports it as-is.
+    return metaStr;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return metaStr;
+  const obj = { ...(parsed as Record<string, unknown>) };
+  if (clean) obj.demo = clean;
+  else delete obj.demo;
+  return obj;
+}
+
 /** Rows come back from D1 with snake_case + integer booleans. */
 export function rowToContentItem(row: Record<string, unknown>): ContentItem {
   const kindRaw = row.kind;
