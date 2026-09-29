@@ -44,5 +44,26 @@ export default tseslint.config(
       "react-refresh/only-export-components": "off",
     },
   },
+  {
+    // eslint-plugin-react-hooks v7 newly reports intentional sync patterns
+    // (reset on dialog open, mount feature-detect, latest-ref) as errors.
+    // Triaged: each site is deliberate and covered by component tests.
+    // Follow-up: refactor toward derived state / useEffectEvent, then
+    // re-enable these as errors.
+    files: [
+      "src/components/portfolio/CommandPalette.tsx",
+      "src/components/portfolio/Contact.tsx",
+      "src/components/portfolio/Cursor.tsx",
+      "src/components/portfolio/IntroBoot.tsx",
+      "src/components/portfolio/Reveal.tsx",
+      "src/components/portfolio/Terminal.tsx",
+      "src/routes/admin.tsx",
+      "src/routes/index.tsx",
+    ],
+    rules: {
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/refs": "warn",
+    },
+  },
   eslintPluginPrettier,
 );
