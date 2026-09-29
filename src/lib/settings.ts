@@ -162,18 +162,16 @@ export const SETTING_DEFS: SettingDef[] = [
     def: "",
     hint: "Empty = analytics off. Paste the beacon token from the dashboard.",
   },
-  ...SECTION_IDS.map(
-    (id): SettingDef => ({
-      key: `section_${id}_visible`,
-      label: `Show "${SECTION_LABELS[id]}" section`,
-      type: "boolean",
-      def: "1",
-      hint:
-        id === "research" || id === "blogs" || id === "testimonials"
-          ? "Also needs at least one visible item to appear."
-          : undefined,
-    }),
-  ),
+  ...SECTION_IDS.map((id): SettingDef => ({
+    key: `section_${id}_visible`,
+    label: `Show "${SECTION_LABELS[id]}" section`,
+    type: "boolean",
+    def: "1",
+    hint:
+      id === "research" || id === "blogs" || id === "testimonials"
+        ? "Also needs at least one visible item to appear."
+        : undefined,
+  })),
 ];
 
 export const DEFAULT_SETTINGS: Record<string, string> = Object.fromEntries(
