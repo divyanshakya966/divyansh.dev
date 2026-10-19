@@ -15,6 +15,10 @@ export function usePublicContent(kind: ContentKind): ContentState {
 
   useEffect(() => {
     let cancelled = false;
+    // Reset synchronously for the new kind so consumers never see the previous
+    // kind's items (and a stale loading=false) during the in-flight fetch.
+    setItems(SEEDS[kind]);
+    setLoading(true);
     async function load() {
       try {
         const res = await fetch(`/api/content?kind=${kind}`, { credentials: "same-origin" });
@@ -88,6 +92,7 @@ export function useKindPresence(kind: ContentKind): boolean {
 
   useEffect(() => {
     let cancelled = false;
+    setPresent(false);
     async function load() {
       try {
         const res = await fetch(`/api/content?kind=${kind}`, { credentials: "same-origin" });

@@ -164,15 +164,17 @@ export function CommandPalette() {
   }, [open]);
 
   useEffect(() => {
+    let focusTimer: ReturnType<typeof setTimeout> | undefined;
     if (open) {
       setQ("");
       setIdx(0);
-      window.setTimeout(() => inputRef.current?.focus(), 30);
+      focusTimer = setTimeout(() => inputRef.current?.focus(), 30);
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
     }
     return () => {
+      if (focusTimer) clearTimeout(focusTimer);
       document.body.style.overflow = "";
     };
   }, [open]);

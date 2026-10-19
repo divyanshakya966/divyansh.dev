@@ -238,13 +238,14 @@ describe("step-up OTP via Resend email", () => {
     );
     expect(denied.status).toBe(403);
 
-    // No-DB fallback is opt-in: without the flag, mutations fail closed.
+    // No-DB fallback is opt-in: without the flag, mutations fail closed. The
+    // status endpoint only exposes posture fields to signed-in admins.
     const noFlagStatus = (await (await server.fetch(req("/api/admin/status"), {}, {})).json()) as {
-      stepUp: boolean;
-      localFallback: boolean;
+      stepUp?: boolean;
+      localFallback?: boolean;
     };
-    expect(noFlagStatus.stepUp).toBe(false);
-    expect(noFlagStatus.localFallback).toBe(false);
+    expect(noFlagStatus.stepUp).toBeUndefined();
+    expect(noFlagStatus.localFallback).toBeUndefined();
     const { hash, salt } = await hashPassword("fallback-password-123");
     process.env.ADMIN_USERNAME = "divyansh";
     process.env.ADMIN_PASSWORD_HASH = hash;
@@ -264,14 +265,15 @@ describe("step-up OTP via Resend email", () => {
     );
     expect(blockedLogin.status).toBe(401);
 
-    // With the flag set, local dev works: env admin + waived step-up.
+    // With the flag set, local dev works: env admin + waived step-up. Status
+    // posture fields are only exposed after login, so confirm via login below.
     process.env.LOCAL_DEV_FALLBACK = "1";
     const flagStatus = (await (await server.fetch(req("/api/admin/status"), {}, {})).json()) as {
-      stepUp: boolean;
-      localFallback: boolean;
+      stepUp?: boolean;
+      localFallback?: boolean;
     };
-    expect(flagStatus.stepUp).toBe(false);
-    expect(flagStatus.localFallback).toBe(true);
+    expect(flagStatus.stepUp).toBeUndefined();
+    expect(flagStatus.localFallback).toBeUndefined();
     const fbLogin = await server.fetch(
       req(
         "/api/admin/login",

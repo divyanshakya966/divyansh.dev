@@ -51,21 +51,22 @@ export function isContentKind(value: unknown): value is ContentKind {
 }
 
 function parseTags(tags: unknown): string[] {
-  if (Array.isArray(tags)) return tags.filter((t): t is string => typeof t === "string");
+  const cap = (arr: string[]) =>
+    arr
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 24);
+  if (Array.isArray(tags)) return cap(tags.filter((t): t is string => typeof t === "string"));
   if (typeof tags === "string") {
     try {
       const parsed: unknown = JSON.parse(tags);
       if (Array.isArray(parsed)) {
-        return parsed.filter((t): t is string => typeof t === "string");
+        return cap(parsed.filter((t): t is string => typeof t === "string"));
       }
     } catch {
       // fall through to comma-separated parsing
     }
-    return tags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean)
-      .slice(0, 24);
+    return cap(tags.split(","));
   }
   return [];
 }
@@ -263,7 +264,10 @@ export function validateContentInput(
     sort_order = Math.trunc(Math.min(1_000_000, Math.max(-1_000_000, n)));
   }
 
-  const is_visible = data.is_visible === undefined ? true : data.is_visible === true;
+  const is_visible =
+    data.is_visible === undefined
+      ? true
+      : data.is_visible === true || data.is_visible === 1 || data.is_visible === "1";
 
   return {
     ok: true,

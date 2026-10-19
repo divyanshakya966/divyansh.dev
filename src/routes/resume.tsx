@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Printer } from "lucide-react";
 import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
@@ -36,6 +37,11 @@ function ResumePage() {
   const { items: projects } = usePublicContent("project");
   const { items: skills } = usePublicContent("skill");
   const { items: certs } = usePublicContent("certification");
+  // Client-only so the generated date can't mismatch between SSR and hydration.
+  const [generated, setGenerated] = useState("");
+  useEffect(() => {
+    setGenerated(new Date().toLocaleDateString());
+  }, []);
 
   const emailRaw = (settings.contact_email ?? "").trim();
   const email = emailRaw.includes("@") ? emailRaw : "divyanshakya.dev@gmail.com";
@@ -142,8 +148,7 @@ function ResumePage() {
         )}
 
         <footer className="mt-10 border-t border-white/10 pt-4 font-mono text-[11px] text-muted-foreground print:hidden">
-          Live render of portfolio data · {site.url}/resume · generated{" "}
-          {new Date().toLocaleDateString()}
+          Live render of portfolio data · {site.url}/resume · generated {generated || "…"}
         </footer>
       </div>
     </main>

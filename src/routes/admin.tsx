@@ -183,6 +183,8 @@ function AdminPage() {
   const [importingFile, setImportingFile] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Monotonic id so an in-flight items load can't overwrite a newer one.
+  const itemsReqId = useRef(0);
 
   // Site settings
   const [serverSettings, setServerSettings] = useState<Record<string, string>>({});
@@ -226,25 +228,31 @@ function AdminPage() {
   }, []);
 
   const refreshItems = useCallback(async () => {
+    const reqId = ++itemsReqId.current;
     setLoadingItems(true);
     setError("");
     try {
       const data = await api<{ items: ContentItem[] }>("/api/admin/items?kind=all");
+      if (reqId !== itemsReqId.current) return;
       setItems(Array.isArray(data.items) ? data.items : []);
     } catch (e) {
+      if (reqId !== itemsReqId.current) return;
       setError(e instanceof Error ? e.message : "Failed to load items.");
     } finally {
-      setLoadingItems(false);
+      if (reqId === itemsReqId.current) setLoadingItems(false);
     }
   }, []);
 
-  const refreshSettings = useCallback(async () => {
+  const refreshSettings = useCallback(async (opts?: { resetDraft?: boolean }) => {
+    const resetDraft = opts?.resetDraft ?? true;
     setLoadingSettings(true);
     try {
       const data = await api<{ settings: Record<string, string> }>("/api/admin/settings");
       const s = data.settings ?? {};
       setServerSettings(s);
-      setSettingsDraft(s);
+      // Preserve in-progress edits unless the caller explicitly asks for a
+      // reset; a background refresh must not clobber an unsaved draft.
+      if (resetDraft) setSettingsDraft(s);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings.");
     } finally {
@@ -742,7 +750,7 @@ function AdminPage() {
     setError("");
     try {
       await api(`/api/admin/settings/${encodeURIComponent(key)}`, { method: "DELETE" });
-      await refreshSettings();
+      await refreshSettings({ resetDraft: false });
       setNotice("Setting reset to default.");
     } catch (e) {
       fail(e, "Reset failed.");
@@ -1072,7 +1080,7 @@ function AdminPage() {
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-semibold">Site settings</h2>
               <button
-                onClick={refreshSettings}
+                onClick={() => refreshSettings()}
                 disabled={loadingSettings}
                 className="rounded-lg px-3 py-1.5 text-xs border border-border hover:bg-muted disabled:opacity-60"
               >

@@ -12,12 +12,19 @@ export function AnalyticsBeacon() {
 
   useEffect(() => {
     if (!token) return;
-    if (document.querySelector("script[data-cf-beacon]")) return;
+    const existing = document.querySelector<HTMLScriptElement>("script[data-cf-beacon]");
+    // Re-inject whenever the token changes so a stale beacon doesn't linger and
+    // double-count under the previous token.
+    if (existing?.getAttribute("data-cf-beacon")?.includes(token)) return;
+    existing?.remove();
     const s = document.createElement("script");
     s.defer = true;
     s.src = "https://static.cloudflareinsights.com/beacon.min.js";
     s.setAttribute("data-cf-beacon", JSON.stringify({ token }));
     document.head.appendChild(s);
+    return () => {
+      s.remove();
+    };
   }, [token]);
 
   return null;

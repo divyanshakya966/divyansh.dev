@@ -63,7 +63,7 @@ type D1Statement = {
   bind: (...values: unknown[]) => D1Statement;
   first: <T = Record<string, unknown>>() => Promise<T | null>;
   all: <T = Record<string, unknown>>() => Promise<D1Result<T>>;
-  run: () => Promise<{ success: boolean; meta?: { last_row_id?: number } }>;
+  run: () => Promise<{ success: boolean; meta?: { last_row_id?: number; changes?: number } }>;
 };
 type D1Database = {
   prepare: (query: string) => D1Statement;
@@ -358,13 +358,10 @@ function getNumberEnvValue(
 }
 
 function getClientIp(request: Request): string {
-  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
-  if (cfIp) return cfIp;
-
-  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  if (forwardedFor) return forwardedFor;
-
-  return "unknown";
+  // Only trust Cloudflare's injected header. X-Forwarded-For is attacker-
+  // controlled off the Cloudflare edge, so honoring it would let a caller
+  // rotate rate-limit/lockout keys at will.
+  return request.headers.get("cf-connecting-ip")?.trim() || "unknown";
 }
 
 function hitRateLimit(
@@ -615,6 +612,7 @@ async function handleContactRequest(request: Request, env: unknown): Promise<Res
   }
 
   // Persist first: no lead is ever lost to a mail-provider outage.
+  let stored = false;
   try {
     await storeContactMessage(getDb(env), {
       name: payload.name,
@@ -622,6 +620,7 @@ async function handleContactRequest(request: Request, env: unknown): Promise<Res
       message: payload.message,
       ip: getClientIp(request),
     });
+    stored = true;
   } catch (error) {
     console.error("Contact store failed", error);
   }
@@ -629,7 +628,8 @@ async function handleContactRequest(request: Request, env: unknown): Promise<Res
   const resendApiKey = getEnvValue(workerEnv, "RESEND_API_KEY");
   if (!resendApiKey) {
     // Stored above — the admin inbox is the delivery channel in dev.
-    return jsonResponse({ ok: true, emailed: false });
+    if (stored) return jsonResponse({ ok: true, emailed: false });
+    return jsonResponse({ error: "Could not save your message. Please try again." }, 503);
   }
 
   const toEmail = getEnvValue(workerEnv, "CONTACT_TO_EMAIL") || DEFAULT_TO_EMAIL;
@@ -653,8 +653,9 @@ async function handleContactRequest(request: Request, env: unknown): Promise<Res
   if (!resendResponse.ok) {
     const errorText = await resendResponse.text();
     console.error("Resend API error", resendResponse.status, errorText);
-    // Message is already stored — report honestly so the UI can say so.
-    return jsonResponse({ ok: true, emailed: false });
+    // Stored is the fallback channel; only claim success if something landed.
+    if (stored) return jsonResponse({ ok: true, emailed: false });
+    return jsonResponse({ error: "Could not deliver your message. Please try again." }, 502);
   }
 
   return jsonResponse({ ok: true, emailed: true });
@@ -672,9 +673,8 @@ async function handleAdminMessages(request: Request, env: unknown): Promise<Resp
     try {
       return jsonResponse({ items: await listContactMessages(getDb(env), limit) });
     } catch (error) {
-      // Fresh DBs predate migration 0004 — report empty instead of 500.
       console.error("Inbox read failed", error);
-      return jsonResponse({ items: [] });
+      return jsonResponse({ error: "Failed to load the inbox." }, 500);
     }
   }
 
@@ -699,7 +699,10 @@ async function handleAdminMessageDelete(
   const db = getDb(env);
   if (db) {
     try {
-      await db.prepare("DELETE FROM contact_messages WHERE id = ?").bind(id).run();
+      const result = await db.prepare("DELETE FROM contact_messages WHERE id = ?").bind(id).run();
+      if (result.meta?.changes === 0) {
+        return jsonResponse({ error: "Not found." }, 404);
+      }
       return jsonResponse({ ok: true });
     } catch (error) {
       console.error("Inbox delete failed", error);
@@ -1092,25 +1095,20 @@ async function queryAllContent(
   kind: ContentKind | "all",
 ): Promise<ContentItem[]> {
   if (db) {
-    try {
-      const res =
-        kind === "all"
-          ? await db
-              .prepare(
-                `SELECT ${CONTENT_COLUMNS} FROM content_items ORDER BY kind ASC, sort_order ASC, id ASC`,
-              )
-              .all<Record<string, unknown>>()
-          : await db
-              .prepare(
-                `SELECT ${CONTENT_COLUMNS} FROM content_items WHERE kind = ? ORDER BY sort_order ASC, id ASC`,
-              )
-              .bind(kind)
-              .all<Record<string, unknown>>();
-      return res.results.map(rowToContentItem);
-    } catch (error) {
-      console.error("D1 admin content query failed", error);
-      return [];
-    }
+    const res =
+      kind === "all"
+        ? await db
+            .prepare(
+              `SELECT ${CONTENT_COLUMNS} FROM content_items ORDER BY kind ASC, sort_order ASC, id ASC`,
+            )
+            .all<Record<string, unknown>>()
+        : await db
+            .prepare(
+              `SELECT ${CONTENT_COLUMNS} FROM content_items WHERE kind = ? ORDER BY sort_order ASC, id ASC`,
+            )
+            .bind(kind)
+            .all<Record<string, unknown>>();
+    return res.results.map(rowToContentItem);
   }
   seedFallbackContent();
   const rows = [...fallbackContent.values()].map(rowToContentItem);
@@ -1526,14 +1524,15 @@ async function handleOtpRequest(request: Request, env: unknown): Promise<Respons
       return jsonResponse({ error: "Alert email is misconfigured. Set a valid ADMIN_EMAIL." }, 501);
     }
 
-    // Invalidate previous live codes and drop dead rows to keep the table tiny.
+    // Invalidate previous live codes; keep rows inside the hourly window so the
+    // send cap above can count them, and only prune rows older than the window.
     await db
       .prepare("UPDATE admin_otps SET used = 1 WHERE user_id = ? AND used = 0")
       .bind(user.id)
       .run();
     await db
-      .prepare("DELETE FROM admin_otps WHERE user_id = ? AND (used = 1 OR expires_at < ?)")
-      .bind(user.id, now)
+      .prepare("DELETE FROM admin_otps WHERE user_id = ? AND created_at <= ?")
+      .bind(user.id, now - 60 * 60 * 1000)
       .run()
       .catch(() => {});
 
@@ -1678,7 +1677,13 @@ async function handleAdminItems(request: Request, env: unknown, url: URL): Promi
     if (kindParam !== "all" && !isContentKind(kindParam)) {
       return jsonResponse({ error: "Invalid kind." }, 400);
     }
-    const items = await queryAllContent(db, kindParam as ContentKind | "all");
+    let items: ContentItem[];
+    try {
+      items = await queryAllContent(db, kindParam as ContentKind | "all");
+    } catch (error) {
+      console.error("Admin content query failed", error);
+      return jsonResponse({ error: "Failed to load content." }, 500);
+    }
     return jsonResponse({ items });
   }
 
@@ -1769,7 +1774,7 @@ async function handleAdminItemById(
     const now = Date.now();
     if (db) {
       try {
-        await db
+        const result = await db
           .prepare(
             "UPDATE content_items SET kind = ?, title = ?, subtitle = ?, description = ?, url = ?, image = ?, tags = ?, meta = ?, sort_order = ?, is_visible = ?, updated_at = ? WHERE id = ?",
           )
@@ -1788,6 +1793,9 @@ async function handleAdminItemById(
             id,
           )
           .run();
+        if (result.meta?.changes === 0) {
+          return jsonResponse({ error: "Not found." }, 404);
+        }
         return jsonResponse({ ok: true });
       } catch (error) {
         console.error("Update content failed", error);
@@ -1816,7 +1824,10 @@ async function handleAdminItemById(
   if (request.method === "DELETE") {
     if (db) {
       try {
-        await db.prepare("DELETE FROM content_items WHERE id = ?").bind(id).run();
+        const result = await db.prepare("DELETE FROM content_items WHERE id = ?").bind(id).run();
+        if (result.meta?.changes === 0) {
+          return jsonResponse({ error: "Not found." }, 404);
+        }
         return jsonResponse({ ok: true });
       } catch (error) {
         console.error("Delete content failed", error);
@@ -2106,12 +2117,14 @@ async function handleAdminRequest(request: Request, env: unknown): Promise<Respo
         metaReady = false;
       }
     }
+    // localFallback/stepUp describe auth posture — only expose to a signed-in
+    // admin, never to an anonymous caller probing the deployment.
+    const authed = (await requireAdmin(request, env)) instanceof Response ? false : true;
     return jsonResponse({
       db: Boolean(db),
       hasAdmin: await hasAnyAdmin(env),
       metaReady,
-      stepUp: Boolean(db),
-      localFallback: isLocalDevFallback(env),
+      ...(authed ? { stepUp: Boolean(db), localFallback: isLocalDevFallback(env) } : {}),
     });
   }
   if (path === "/api/admin/login" && request.method === "POST") {

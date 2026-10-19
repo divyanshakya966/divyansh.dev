@@ -12,14 +12,22 @@ beforeEach(() => {
 
 describe("admin API without DB (local fallback)", () => {
   it("reports status and serves seed certifications", async () => {
-    const status = await server.fetch(req("/api/admin/status"), {}, {});
-    expect(await status.json()).toEqual({
+    const statusRes = await server.fetch(req("/api/admin/status"), {}, {});
+    const status = (await statusRes.json()) as {
+      db: boolean;
+      hasAdmin: boolean;
+      metaReady: boolean;
+      stepUp?: boolean;
+      localFallback?: boolean;
+    };
+    expect(status).toMatchObject({
       db: false,
       hasAdmin: false,
       metaReady: true,
-      stepUp: false,
-      localFallback: false,
     });
+    // Posture fields are only exposed to signed-in admins, never anonymous.
+    expect(status.stepUp).toBeUndefined();
+    expect(status.localFallback).toBeUndefined();
 
     const res = await server.fetch(req("/api/content?kind=certification"), {}, {});
     const data = (await res.json()) as { items: { title: string; url: string }[] };
@@ -444,13 +452,11 @@ describe("admin API with D1", () => {
     const db = new FakeD1();
     const status = (await (
       await server.fetch(req("/api/admin/status"), { DB: db }, {})
-    ).json()) as { db: boolean; hasAdmin: boolean; metaReady: boolean; stepUp: boolean };
+    ).json()) as { db: boolean; hasAdmin: boolean; metaReady: boolean };
     expect(status).toEqual({
       db: true,
       hasAdmin: false,
       metaReady: true,
-      stepUp: true,
-      localFallback: false,
     });
   });
 

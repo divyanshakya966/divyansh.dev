@@ -108,22 +108,7 @@ export function normalizeUsername(username: unknown): string | null {
 }
 
 export function getSessionTokenFromCookie(request: Request): string | null {
-  const header = request.headers.get("cookie");
-  if (!header) return null;
-  for (const part of header.split(";")) {
-    const idx = part.indexOf("=");
-    if (idx === -1) continue;
-    const name = part.slice(0, idx).trim();
-    if (name === SESSION_COOKIE) {
-      const value = part
-        .slice(idx + 1)
-        .trim()
-        .replace(/^"|"$/g, "");
-      if (/^[0-9a-f]{64}$/i.test(value)) return value.toLowerCase();
-      return null;
-    }
-  }
-  return null;
+  return getCookieToken(request, SESSION_COOKIE);
 }
 
 export function buildSessionCookie(token: string, secure: boolean): string {
@@ -146,8 +131,9 @@ function getCookieToken(request: Request, name: string): string | null {
       .slice(idx + 1)
       .trim()
       .replace(/^"|"$/g, "");
+    // Keep scanning on a malformed duplicate rather than giving up: a stale or
+    // forged cookie for the same name must not shadow a later valid one.
     if (/^[0-9a-f]{64}$/i.test(value)) return value.toLowerCase();
-    return null;
   }
   return null;
 }

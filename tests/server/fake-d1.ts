@@ -20,7 +20,7 @@ export class FakeStatement {
   async all<T = Row>(): Promise<{ results: T[]; success: boolean }> {
     return { results: this.db.handleAll(this.sql, this.params) as T[], success: true };
   }
-  async run(): Promise<{ success: boolean; meta?: { last_row_id?: number } }> {
+  async run(): Promise<{ success: boolean; meta?: { last_row_id?: number; changes?: number } }> {
     return this.db.handleRun(this.sql, this.params);
   }
 }
@@ -111,7 +111,10 @@ export class FakeD1 {
     return rows;
   }
 
-  handleRun(sql: string, p: unknown[]): { success: boolean; meta?: { last_row_id?: number } } {
+  handleRun(
+    sql: string,
+    p: unknown[],
+  ): { success: boolean; meta?: { last_row_id?: number; changes?: number } } {
     if (sql.startsWith("INSERT INTO admin_sessions")) {
       this.sessions.push({ token_hash: p[0], user_id: p[1], expires_at: p[2], created_at: p[3] });
       return { success: true };
@@ -182,7 +185,7 @@ export class FakeD1 {
         row.is_visible = p[9];
         row.updated_at = p[10];
       }
-      return { success: true };
+      return { success: true, meta: { changes: row ? 1 : 0 } };
     }
     if (sql.startsWith("UPDATE content_items SET sort_order")) {
       const row = this.items.find((i) => i.id === p[2] && i.kind === p[3]);
@@ -193,8 +196,9 @@ export class FakeD1 {
       return { success: true };
     }
     if (sql.startsWith("DELETE FROM content_items WHERE id")) {
+      const before = this.items.length;
       this.items = this.items.filter((i) => i.id !== p[0]);
-      return { success: true };
+      return { success: true, meta: { changes: before - this.items.length } };
     }
     if (sql.startsWith("INSERT INTO login_attempts")) {
       this.loginAttempts.push({ bucket: p[0], created_at: p[1] });
@@ -243,11 +247,9 @@ export class FakeD1 {
       if (row) row.attempts = Number(row.attempts) + 1;
       return { success: true };
     }
-    if (sql.startsWith("DELETE FROM admin_otps WHERE user_id = ? AND (used = 1 OR expires_at")) {
-      const now = Number(p[1]);
-      this.otps = this.otps.filter(
-        (o) => !(o.user_id === p[0] && (Number(o.used) === 1 || Number(o.expires_at) < now)),
-      );
+    if (sql.startsWith("DELETE FROM admin_otps WHERE user_id = ? AND created_at")) {
+      const cutoff = Number(p[1]);
+      this.otps = this.otps.filter((o) => !(o.user_id === p[0] && Number(o.created_at) <= cutoff));
       return { success: true };
     }
     if (sql.startsWith("DELETE FROM admin_otps WHERE user_id")) {
@@ -271,8 +273,9 @@ export class FakeD1 {
       return { success: true, meta: { last_row_id: id } };
     }
     if (sql.startsWith("DELETE FROM contact_messages WHERE id")) {
+      const before = this.messages.length;
       this.messages = this.messages.filter((m) => m.id !== p[0]);
-      return { success: true };
+      return { success: true, meta: { changes: before - this.messages.length } };
     }
     if (sql.startsWith("INSERT INTO site_settings")) {
       const existing = this.settings.find((s) => s.key === p[0]);

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { ArrowUp, Github, Linkedin, Mail } from "lucide-react";
 import { Magnetic } from "./Magnetic";
@@ -59,6 +59,10 @@ function ClockLine() {
 
 export function Footer() {
   const { settings } = useSiteSettings();
+  const [year, setYear] = useState<number | null>(null);
+  useEffect(() => {
+    setYear(new Date().getFullYear());
+  }, []);
   const repo = safeHref(settings.footer_repo ?? "", DEFAULT_REPO) || DEFAULT_REPO;
   const github = safeHref(settings.social_github ?? "", DEFAULT_GITHUB) || DEFAULT_GITHUB;
   const linkedin = safeHref(settings.social_linkedin ?? "", DEFAULT_LINKEDIN) || DEFAULT_LINKEDIN;
@@ -249,7 +253,7 @@ export function Footer() {
         </motion.div>
 
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-white/10 py-5 font-mono text-[11px] tabular-nums text-muted-foreground">
-          <div>© {new Date().getFullYear()} Divyansh Shakya</div>
+          <div>© {year} Divyansh Shakya</div>
           <ClockLine />
         </div>
       </div>

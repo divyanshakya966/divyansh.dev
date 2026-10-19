@@ -9,15 +9,11 @@ function formatIST(d: Date): string {
   return `${pad(ist.getHours())}:${pad(ist.getMinutes())}:${pad(ist.getSeconds())} IST`;
 }
 
-/** Live IST clock — ticks every second so the UI feels alive. SSR-safe. */
+/** Live IST clock — ticks every second so the UI feels alive. */
 export function useISTClock(): string {
-  const [now, setNow] = useState(() => {
-    try {
-      return formatIST(new Date());
-    } catch {
-      return "--:--:-- IST";
-    }
-  });
+  // Placeholder on first render so SSR and hydration agree; the effect fills in
+  // the real time immediately after mount (a render-time Date would mismatch).
+  const [now, setNow] = useState("--:--:-- IST");
 
   useEffect(() => {
     const tick = () => {
