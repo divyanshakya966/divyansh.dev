@@ -17,7 +17,13 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type Status = { db: boolean; hasAdmin: boolean; metaReady: boolean; stepUp: boolean };
+type Status = {
+  db: boolean;
+  hasAdmin: boolean;
+  metaReady: boolean;
+  stepUp: boolean;
+  localFallback?: boolean;
+};
 type Tab = ContentKind | "settings" | "inbox";
 
 type InboxMessage = {
@@ -868,11 +874,15 @@ function AdminPage() {
               {status && (
                 <span className="ml-2 font-mono text-xs">
                   · {status.db ? "D1 connected" : "env fallback (local)"}
-                  {status.db && (
+                  {status.db ? (
                     <span className={otp.verified ? "text-emerald-300" : "text-amber-300"}>
                       {" "}
                       · {otp.verified ? "step-up verified" : "step-up required for saves"}
                     </span>
+                  ) : status.localFallback ? (
+                    <span className="text-amber-300"> · step-up waived (LOCAL_DEV_FALLBACK)</span>
+                  ) : (
+                    <span className="text-red-300"> · no database — saves are blocked</span>
                   )}
                 </span>
               )}

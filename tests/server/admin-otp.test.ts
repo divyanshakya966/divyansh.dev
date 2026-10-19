@@ -16,12 +16,14 @@ beforeEach(() => {
   delete process.env.ADMIN_PASSWORD_SALT;
   delete process.env.ADMIN_EMAIL;
   delete process.env.RESEND_API_KEY;
+  delete process.env.LOCAL_DEV_FALLBACK;
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env.ADMIN_EMAIL;
   delete process.env.RESEND_API_KEY;
+  delete process.env.LOCAL_DEV_FALLBACK;
 });
 
 function stubResend(ok = true) {
@@ -236,16 +238,40 @@ describe("step-up OTP via Resend email", () => {
     );
     expect(denied.status).toBe(403);
 
-    // No-DB fallback: mutations work without a grant, status says stepUp:false.
-    const fbStatus = (await (await server.fetch(req("/api/admin/status"), {}, {})).json()) as {
+    // No-DB fallback is opt-in: without the flag, mutations fail closed.
+    const noFlagStatus = (await (await server.fetch(req("/api/admin/status"), {}, {})).json()) as {
       stepUp: boolean;
+      localFallback: boolean;
     };
-    expect(fbStatus.stepUp).toBe(false);
-    // Fallback sessions come from env-admin credentials.
+    expect(noFlagStatus.stepUp).toBe(false);
+    expect(noFlagStatus.localFallback).toBe(false);
     const { hash, salt } = await hashPassword("fallback-password-123");
     process.env.ADMIN_USERNAME = "divyansh";
     process.env.ADMIN_PASSWORD_HASH = hash;
     process.env.ADMIN_PASSWORD_SALT = salt;
+    // Env-admin login is also gated on the flag — denied without it.
+    const blockedLogin = await server.fetch(
+      req(
+        "/api/admin/login",
+        {
+          method: "POST",
+          body: JSON.stringify({ username: "divyansh", password: "fallback-password-123" }),
+        },
+        "10.1.0.6",
+      ),
+      {},
+      {},
+    );
+    expect(blockedLogin.status).toBe(401);
+
+    // With the flag set, local dev works: env admin + waived step-up.
+    process.env.LOCAL_DEV_FALLBACK = "1";
+    const flagStatus = (await (await server.fetch(req("/api/admin/status"), {}, {})).json()) as {
+      stepUp: boolean;
+      localFallback: boolean;
+    };
+    expect(flagStatus.stepUp).toBe(false);
+    expect(flagStatus.localFallback).toBe(true);
     const fbLogin = await server.fetch(
       req(
         "/api/admin/login",

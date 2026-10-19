@@ -1,8 +1,8 @@
-# Admin + external DB setup (5 minutes, no connection strings)
+# Admin setup
 
-The admin panel (`/admin`) stores its **hashed password in an external managed
-database** — Cloudflare D1 (SQLite). Workers talk to it over the `DB` binding,
-so there is no `DATABASE_URL`, no driver, no connection pool to manage.
+The admin panel (`/admin`) stores its hashed password in Cloudflare D1 (SQLite).
+Workers reach it over the `DB` binding, so there is no connection string, driver
+or pool to manage.
 
 ## 1. Create the database (once)
 
@@ -18,9 +18,8 @@ Copy the `database_id` it prints into `wrangler.jsonc`:
 ```
 
 > ⚠️ Keep `"binding"` as `"DB"` — the server reads `env.DB`. Newer wrangler
-> versions auto-insert `"binding": "portfolio_db"` (derived from the database
-> name) when creating the DB; rename it back to `"DB"`, commit, and push,
-> otherwise production reports "D1 is not bound".
+> versions auto-insert a different binding name when creating the DB; rename it
+> back to `"DB"` and redeploy, otherwise production reports "D1 is not bound".
 
 ## 2. Create tables (local + production)
 
@@ -29,174 +28,99 @@ npm run db:migrate:local    # local dev
 npm run db:migrate:remote   # production
 ```
 
-This applies `migrations/0001_init.sql` (`admin_users`, `admin_sessions`,
-`content_items`), `0002_meta_settings.sql` (`meta` column + `site_settings`)
-and `0003_otp_grants.sql` (`admin_otps` + `admin_grants`). Re-run both commands
-after pulling updates that add new migration files.
+This applies everything under `migrations/`. Re-run both commands after pulling
+updates that add new migration files.
 
 ## 3. Create your admin user (hashed, never plaintext)
 
 ```bash
-npm run admin:create -- --username divyansh --apply-remote
-# local dev:  npm run admin:create -- --username divyansh --apply-local
+npm run admin:create -- --username <name> --apply-remote
+# local dev:  npm run admin:create -- --username <name> --apply-local
 # machine-generated password (no typing): add --generate
-# bypass the hidden prompt:  ADMIN_PASSWORD='...' npm run admin:create -- --username divyansh --apply-remote
 ```
 
-The script hashes the password with PBKDF2-SHA256 (100k iterations — the
-Cloudflare Workers maximum, random 16-byte salt — same code as
-`src/lib/admin-auth.ts`), and upserts it into D1. Without `--apply-*` it
-prints the SQL + `.dev.vars` fallback values instead. Wait for the
-`Done. Sign in at /admin.` line — anything else means it did not write.
+The script hashes the password before it ever touches the database and upserts
+it into D1. Without `--apply-*` it prints the SQL + `.dev.vars` fallback values
+instead. Wait for the `Done. Sign in at /admin.` line — anything else means it
+did not write.
 
 ## 4. Sign in
 
-Open `/admin` → sign in. You get full control of the portfolio:
+Open `/admin` → sign in. From there you control every section (Certifications,
+Projects, Experience, Achievements, Skills, About, Status, Research, Blogs),
+add/edit/delete items, toggle visibility, reorder, import seeds, and
+export/import JSON, plus manage **Site settings** and **Change password**.
 
-- **Tabs for every section:** Certifications, Projects, Experience, Achievements,
-  Skills, About cards, Status cards, Research, Blogs — plus **Site settings**.
-- **Add / Edit / Delete**, **Show / Hide**, **↑ ↓ reorder** (auto-saves
-  `sort_order`, the public site follows it).
-- **Import seeds** (one-click editable ownership), **Export/Import JSON**
-  (backup & restore per section).
-- **Site settings:** hero roles/tagline/location, about intro, contact email +
-  socials + status line, footer repo link, and per-section **on/off toggles**.
-- **Change password** (other sessions are signed out).
-- **Two-step verification:** every save, reorder, import, settings edit and
-  password change additionally requires a one-time 6-digit code emailed to
-  you (see below). Reading/listing never needs it.
+## Two-step verification
 
-## Two-step verification (step-up codes via Resend)
-
-Even with your password, nobody can change anything without a code from your
-inbox. How it works:
-
-1. Sign in at `/admin` → panel **Two-step verification** → **Email me a code**.
-2. Enter the 6-digit code (expires in 10 min) → **Verify**.
-3. Saves, password change and settings work for the next **10 minutes**;
-   **Lock changes** ends it early. Logging out ends it too.
-
-Setup:
+Every state-changing action (saves, reorder, import, settings, password change)
+requires a one-time code emailed to you on top of your session. Reading and
+listing never needs it. Configure delivery with:
 
 ```bash
-npx wrangler secret put RESEND_API_KEY   # same key as the contact form
-npx wrangler secret put ADMIN_EMAIL      # where codes go (falls back to CONTACT_TO_EMAIL)
-npm run db:migrate:remote                # adds admin_otps + admin_grants (migration 0003)
+npx wrangler secret put RESEND_API_KEY
+npx wrangler secret put ADMIN_EMAIL
+npm run db:migrate:remote
 ```
 
-Protections: max 5 codes/hour + 60 s between sends, codes are SHA-256 hashed
-in D1 (plaintext never stored), 5 wrong guesses lock the code, verify attempts
-are IP rate-limited, grants are opaque hashed tokens bound to your session and
-die with logout or password change. Requesting a code also emails you — an
-unexpected code email means someone has your password: change it immediately.
-Rotate secrets anytime with `npx wrangler secret put …` (takes effect instantly,
-no redeploy).
-Local `.dev.vars` fallback mode has no email channel, so it skips step-up
-(`status.stepUp` is false there); production with D1 always enforces it.
+Codes are short-lived and single-use; grants are bound to your session and end
+with logout or a password change. Local `.dev.vars` fallback mode has no email
+channel and only runs when `LOCAL_DEV_FALLBACK=1` is set; production with D1
+always enforces step-up.
 
 ## How the public site behaves
 
-| Section                                                                                     | Visibility                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| About / Skills / Projects / Experience / Certifications / Achievements / Building / Contact | Visible while the section holds ≥1 visible item **and** its toggle is on (`Site settings`). Seeded with the current site content until D1 rows exist; hiding everything (or toggling off) hides the section. |
-| Research (`#research`), Blogs (`#blogs`), Kind words (`#testimonials`)                      | **Hidden** until you publish ≥1 visible item from `/admin` (toggle must also be on).                                                                                                                         |
+| Section                                                                                     | Visibility                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| About / Skills / Projects / Experience / Certifications / Achievements / Building / Contact | Visible while the section holds ≥1 visible item **and** its toggle is on. Seeded with the current site content until D1 rows exist; hiding everything (or toggling off) hides the section. |
+| Research (`#research`), Blogs (`#blogs`), Kind words (`#testimonials`)                      | **Hidden** until you publish ≥1 visible item from `/admin` (toggle must also be on).                                                                                                       |
 
-Nav links follow automatically: Research/Blogs/Kind words appear once published; links for
-toggled-off sections disappear. The footer sitemap and `⌘K` palette follow the same rules —
-you can never link to a section that renders null. `meta.publish_at` (epoch ms) schedules an
-item to auto-publish later; drafts stay hidden via the eye toggle.
+Nav links, the footer sitemap and the `⌘K` palette follow the same rules — you
+can never link to a section that renders null. `meta.publish_at` schedules an
+item to publish later; drafts stay hidden via the eye toggle.
 
 ## Field map (what each field does per kind)
 
 - **Common:** title\*, subtitle, description, URL, image, tags (comma-separated),
   sort order, visible flag.
-- **project:** subtitle = tag chip, URL = repo (Source button),
-  **Live demo URL field** = hosted app (Live pill on every row + dialog),
-  tags = stack, image = screenshot,
+- **project:** subtitle = tag chip, URL = repo (Source button), **Live demo URL
+  field** = hosted app, tags = stack, image = screenshot,
   meta `{"long": "dialog text", "highlights": ["win", …]}`.
 - **experience:** subtitle = venue, description = body,
-  meta `{"when": "May 2026 – July 2026", "tag": "Open Source", "bullets": ["did X", …]}`.
+  meta `{"when": "May 2026 – July 2026", "tag": "Open Source", "bullets": [...]}`.
 - **achievement:** subtitle = sub-line, meta `{"icon": "trophy|award|badge|star"}`.
-- **skill:** title = group name, tags = skills. No meta.
+- **skill:** title = group name, tags = skills.
 - **about:** title + description = card, meta `{"icon": "shield|cloud|code|terminal"}`.
 - **building:** meta.card `build|learn|now`. `learn` uses meta `{"lines": [...]}`;
   `now` uses meta `{"stats": [{"l": "…", "v": "…"}]}`.
 - **testimonial:** title = person, subtitle = role/org, description = quote, URL = profile.
-  No meta.
-- **certification/research/blog:** URL = verify/paper/article link. No meta.
+- **certification/research/blog:** URL = verify/paper/article link.
 
 Meta is a JSON object (max 4000 chars); the editor validates it before saving.
 
-## Security model (strict by default)
-
-- PBKDF2-SHA256, 100k iterations — the Cloudflare Workers maximum, per-user salt; constant-time compare.
-- Sessions: 32-byte opaque token, only `SHA-256(token)` stored; cookie is
-  `httpOnly`, `Secure` (https), `SameSite=Lax`, 12h expiry.
-- Login rate limit: 5 attempts / 10 min per IP (per edge isolate); generic
-  error messages plus dummy-PBKDF2 timing equalization (no user enumeration
-  by message or timing); CSRF origin check on login and all cookie-authed writes.
-- Transport hardening on every response: `frame-ancestors 'self'` (+ legacy
-  `X-Frame-Options`, clickjacking defence for `/admin`), `nosniff`,
-  `same-origin` referrer policy. No CORS headers are ever set (same-origin only).
-- DoS guards: all JSON bodies capped at 64 KB (stream-capped read, rejected
-  before parse); reorder/import capped at 200 rows; sort/tag/meta lengths
-  bounded; over-long fields are rejected with 400s, never silently truncated.
-- All D1 access is parameterized; crypto failures are logged server-side,
-  never fail open, and never leak material to clients.
-- No public signup — admins are created only via the CLI script.
-- `/admin` is `noindex`, and `robots.txt` disallows `/admin` + `/api/admin/`.
-
 ## Local dev without D1
 
-If `DB` isn't bound yet, the server falls back to:
-
-- Content: all seeds + in-memory CRUD (non-persistent, for UI testing).
-- Auth: single admin from environment (`ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` /
-  `ADMIN_PASSWORD_SALT` from `npm run admin:create`). Provide them by exporting
-  in your shell (always works, since the server falls back to `process.env`):
+If `DB` isn't bound yet **and `LOCAL_DEV_FALLBACK=1` is set**, the server falls
+back to seeds + in-memory CRUD and a single admin from environment variables:
 
 ```bash
-ADMIN_USERNAME=divyansh ADMIN_PASSWORD_HASH=<hex> ADMIN_PASSWORD_SALT=<hex> npm run dev
+LOCAL_DEV_FALLBACK=1 \
+ADMIN_USERNAME=<name> ADMIN_PASSWORD_HASH=<hex> ADMIN_PASSWORD_SALT=<hex> npm run dev
 ```
 
-(Adding them to `.dev.vars` also works if your Cloudflare plugin setup forwards
-custom vars to the worker runtime; exported env vars are the sure path.)
-
-Set up D1 before deploying — the fallback is local-only.
-
-## API reference
-
-- `GET /api/content?kind=…` — public, visible items only. Kinds: `certification`,
-  `research`, `blog`, `project`, `experience`, `achievement`, `skill`, `about`,
-  `building`, `testimonial`.
-- `GET /api/settings` — public merged site settings (cached).
-- `GET /rss.xml` — research + blogs feed. `GET /api/status` — public deploy sanity
-  (`{ ok, time, db, metaReady, counts }`).
-- `GET /api/admin/messages`, `DELETE /api/admin/messages/:id` — contact inbox
-  (reads need a session; deletes need step-up). `POST /api/admin/upload` — image
-  upload, needs the R2 bucket (see `docs/MEDIA_UPLOADS.md`). `GET /media/*` — serves uploads.
-- `GET /api/admin/status` — `{ db, hasAdmin, metaReady }` (setup + schema probe;
-  if `metaReady` is false, apply migration 0002).
-- `POST /api/admin/login|logout`, `GET /api/admin/me`
-- `POST /api/admin/otp/request`, `POST /api/admin/otp/verify` `{ code }`,
-  `GET /api/admin/otp/status`, `POST /api/admin/otp/revoke`
-- `GET|POST /api/admin/items?kind=all|…`, `PUT|DELETE /api/admin/items/:id`
-- `POST /api/admin/reorder` `{ kind, ids }`, `PUT /api/admin/password`
-- `POST /api/admin/seed-import` `{ kind }` — one-time import of that kind's
-  seeds into D1 (409 once rows exist; 400 for seedless kinds like research/blog/testimonial)
-- `GET|PUT /api/admin/settings`, `DELETE /api/admin/settings/:key` (reset to default)
+The fallback is **opt-in** and fails closed: without `LOCAL_DEV_FALLBACK=1`, a
+missing `DB` binding denies login and blocks all mutations. An accidentally
+unbound production Worker can never bypass auth, so set up D1 before deploying.
 
 ## Troubleshooting
 
-| Symptom                                                | Cause → fix                                                                                                                                                                            |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Banner: "D1 is not bound"                              | `binding` isn't `"DB"` in the deployed `wrangler.jsonc`, or CI hasn't deployed the fix yet → check Deployments, fix name, push.                                                        |
-| Banner: "No admin user exists yet" (D1 bound)          | Remote DB empty → `npm run db:migrate:remote`, then `admin:create --apply-remote`.                                                                                                     |
-| "Invalid username or password" with the right password | (1) Throttled — wait 10 min. (2) Tested seconds after a reset — D1 reads can lag; wait 3–5 min. (3) Row never updated — compare `SELECT SUBSTR(password_hash,1,8)` before/after reset. |
-| Save rejected: "Step-up verification required"         | Verify the emailed code in the Two-step panel first (grants last 10 min). If no email arrives: check `ADMIN_EMAIL`/`RESEND_API_KEY` secrets and spam.                                  |
-| "Code locked… request a new one"                       | 5 wrong guesses used up — request a fresh code (previous one is dead).                                                                                                                 |
-| "Too many attempts"                                    | Per-IP login throttle — wait 10 minutes, then try once.                                                                                                                                |
-| Amber "schema is outdated" in `/admin`                 | Migration 0002 missing → `npm run db:migrate:remote` (+ `:local`).                                                                                                                     |
-| `wrangler d1 list` shows `num_tables: 0`               | Migrations never applied to remote → step 2 with `--remote`.                                                                                                                           |
-| Edits don't show publicly                              | CDN caches content ~5 min (`s-maxage=300`) → wait or purge cache in the Cloudflare dashboard.                                                                                          |
-| Contact form 500 in production                         | `RESEND_API_KEY` (and sender) missing on the worker → `npx wrangler secret put …` or dashboard Variables.                                                                              |
+| Symptom                                                | Cause → fix                                                                                   |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Banner: "D1 is not bound"                              | `binding` isn't `"DB"` in the deployed `wrangler.jsonc`, or CI hasn't deployed the fix yet.   |
+| Banner: "No admin user exists yet" (D1 bound)          | Remote DB empty → `npm run db:migrate:remote`, then `admin:create --apply-remote`.            |
+| "Invalid username or password" with the right password | Throttled — wait, then try once. If you just reset it, D1 reads can lag briefly.              |
+| Save rejected: "Step-up verification required"         | Verify the emailed code first. If no email arrives, check the Resend secrets and spam folder. |
+| Amber "schema is outdated" in `/admin`                 | A migration is missing → re-run the migrate commands with `--remote` (+ `:local`).            |
+| `wrangler d1 list` shows `num_tables: 0`               | Migrations never applied to remote → step 2 with `--remote`.                                  |
+| Edits don't show publicly                              | CDN caches content briefly → wait or purge cache in the Cloudflare dashboard.                 |
+| Contact form 500 in production                         | `RESEND_API_KEY` (and sender) missing on the worker → set it via `wrangler secret put`.       |

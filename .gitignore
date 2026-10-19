@@ -20,6 +20,8 @@ dist-ssr
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
+.dev.vars.*
+!.dev.vars.example
 
 # Editor directories and files
 .vscode/*
@@ -31,7 +33,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Secrets / env files
 .env
+.env.*
+!.env.example
 
 # Test artifacts
 coverage/

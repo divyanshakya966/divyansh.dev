@@ -3,6 +3,7 @@ import { Reveal } from "./Reveal";
 import { FileText, ExternalLink } from "lucide-react";
 import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
+import { safeHref } from "@/lib/utils";
 
 /**
  * Hidden until you publish at least one visible research item from /admin.
@@ -56,7 +57,7 @@ export function Research() {
               <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2">
                 {paper.url ? (
                   <a
-                    href={paper.url}
+                    href={safeHref(paper.url, "#")}
                     target="_blank"
                     rel="noreferrer noopener"
                     aria-label={`Read ${paper.title}`}

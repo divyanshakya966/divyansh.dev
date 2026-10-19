@@ -108,4 +108,6 @@ The overall direction is modern, minimal, and technical:
 
 ## Focus
 
-This repository is meant to represent my profile and work in a polished way, not to document every implementation detail or any sensitive feature set. The emphasis is on presentation, clarity, and a strong first impression while keeping private capabilities out of the public documentation.
+This repository represents my profile and work. The emphasis is on presentation
+and clarity; the admin area and runtime setup are documented only to the extent
+needed to run the project.

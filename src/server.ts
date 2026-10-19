@@ -83,6 +83,10 @@ type WorkerEnv = {
   ADMIN_PASSWORD_SALT?: string;
   ADMIN_EMAIL?: string;
   TURNSTILE_SECRET_KEY?: string;
+  // Opt-in only: enables the no-D1 in-memory fallback (seeds + env admin +
+  // waived step-up) for local dev. Must stay unset in production so a missing
+  // DB binding can never silently bypass auth/step-up.
+  LOCAL_DEV_FALLBACK?: string;
 };
 
 /** Minimal R2 typings so we don't need @cloudflare/workers-types. */
@@ -171,19 +175,76 @@ function seedFallbackContent() {
   }
 }
 
-function securityHeaders(): HeadersInit {
+const CSP_NONCE_HEADER = "x-csp-nonce";
+
+function generateCspNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/=+$/, "");
+}
+
+function withHeader(headers: Headers, name: string, value: string): Headers {
+  const next = new Headers(headers);
+  next.set(name, value);
+  return next;
+}
+
+// Rebuild the SSR request with the CSP nonce header. `new Request(request, …)`
+// trips undici in Node when reusing a consumed/streamed body, so construct
+// fresh and only attach a body when one is present.
+function buildSsrRequest(request: Request, nonce: string): Request {
+  const headers = withHeader(request.headers, CSP_NONCE_HEADER, nonce);
+  const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  if (!hasBody || !request.body) {
+    return new Request(request.url, { method: request.method, headers });
+  }
+  return new Request(request.url, {
+    method: request.method,
+    headers,
+    body: request.body,
+    // @ts-expect-error duplex is required for streaming request bodies
+    duplex: "half",
+  });
+}
+
+function contentSecurityPolicy(nonce?: string): string {
+  // With a per-request nonce, inline scripts/styles must carry it and
+  // 'unsafe-inline' is omitted (a nonce makes it redundant and browsers
+  // ignore 'unsafe-inline' when a nonce is present anyway). Without a
+  // nonce (JSON APIs, error pages) fall back to 'unsafe-inline'.
+  const inline = nonce ? `'nonce-${nonce}'` : "'unsafe-inline'";
+  return [
+    "default-src 'self'",
+    // SSR/hydration + the theme bootstrap emit inline scripts/styles.
+    // Turnstile + the optional Web Analytics beacon are external scripts.
+    `script-src 'self' ${inline} https://challenges.cloudflare.com https://static.cloudflareinsights.com`,
+    `style-src 'self' ${inline}`,
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
+    "frame-src https://challenges.cloudflare.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join("; ");
+}
+
+function securityHeaders(nonce?: string): HeadersInit {
   return {
-    // Clickjacking defence for /admin (no legitimate framing anywhere).
-    "content-security-policy": "frame-ancestors 'self'",
-    "x-frame-options": "SAMEORIGIN",
+    "content-security-policy": contentSecurityPolicy(nonce),
+    "x-frame-options": "DENY",
     "x-content-type-options": "nosniff",
     "referrer-policy": "same-origin",
+    // HTTPS-only for 1 year incl. subdomains; only ever sent over HTTPS by
+    // browsers, so it is a no-op on local http dev.
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
   };
 }
 
-function withSecurityHeaders(response: Response): Response {
+function withSecurityHeaders(response: Response, nonce?: string): Response {
   const headers = new Headers(response.headers);
-  for (const [k, v] of Object.entries(securityHeaders())) headers.set(k, v);
+  for (const [k, v] of Object.entries(securityHeaders(nonce))) headers.set(k, v);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -270,6 +331,17 @@ function getDb(env: unknown): D1Database | null {
   return null;
 }
 
+/**
+ * Local-dev-only fallback switch. When unset (the production default), a
+ * missing D1 binding means "not configured": auth denies and mutations fail
+ * closed instead of silently using in-memory data + env credentials.
+ */
+function isLocalDevFallback(env: unknown): boolean {
+  const workerEnv = getWorkerEnv(env);
+  const value = getEnvValue(workerEnv, "LOCAL_DEV_FALLBACK")?.toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -342,6 +414,64 @@ function isLoginRateLimited(request: Request): boolean {
     LOGIN_RATE_LIMIT_WINDOW_MS,
     LOGIN_RATE_LIMIT_MAX,
   );
+}
+
+/**
+ * Persistent login throttle. Checks failed-attempt counts for the client IP
+ * and the target username within the window; returns true when either is at
+ * or over the cap, otherwise records this attempt. Falls back to the
+ * in-memory limiter when D1 is unavailable (local dev).
+ */
+async function isLoginRateLimitedPersistent(
+  request: Request,
+  env: unknown,
+  username: string,
+): Promise<boolean> {
+  const db = getDb(env);
+  if (!db) return isLoginRateLimited(request);
+  const ip = getClientIp(request);
+  const now = Date.now();
+  const cutoff = now - LOGIN_RATE_LIMIT_WINDOW_MS;
+  const buckets = [`login-ip:${ip}`, `login-user:${username.toLowerCase()}`];
+  try {
+    for (const bucket of buckets) {
+      const row = await db
+        .prepare("SELECT COUNT(*) AS n FROM login_attempts WHERE bucket = ? AND created_at > ?")
+        .bind(bucket, cutoff)
+        .first<{ n: number }>();
+      if (Number(row?.n ?? 0) >= LOGIN_RATE_LIMIT_MAX) return true;
+    }
+    // Opportunistic prune keeps the table from growing unbounded.
+    await db.prepare("DELETE FROM login_attempts WHERE created_at <= ?").bind(cutoff).run();
+    const stmt = db.prepare("INSERT INTO login_attempts (bucket, created_at) VALUES (?, ?)");
+    const inserts = buckets.map((bucket) => stmt.bind(bucket, now));
+    if (db.batch) await db.batch(inserts);
+    else for (const s of inserts) await s.run();
+    return false;
+  } catch (error) {
+    // Never lock the owner out because of a throttle-table problem.
+    console.error("Login throttle check failed", error);
+    return false;
+  }
+}
+
+async function clearLoginAttempts(request: Request, env: unknown, username: string): Promise<void> {
+  const db = getDb(env);
+  if (!db) {
+    loginRateLimitStore.delete(`login:${getClientIp(request)}`);
+    return;
+  }
+  try {
+    const stmt = db.prepare("DELETE FROM login_attempts WHERE bucket = ?");
+    const deletes = [
+      stmt.bind(`login-ip:${getClientIp(request)}`),
+      stmt.bind(`login-user:${username.toLowerCase()}`),
+    ];
+    if (db.batch) await db.batch(deletes);
+    else for (const s of deletes) await s.run();
+  } catch (error) {
+    console.error("Clearing login attempts failed", error);
+  }
 }
 
 const MAX_NAME_LENGTH = 120;
@@ -585,6 +715,7 @@ async function handleAdminMessageDelete(
 /* ---------------- Media uploads (optional R2 bucket) ---------------- */
 
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+const MAX_UPLOAD_BODY_BYTES = MAX_UPLOAD_BYTES + 64 * 1024;
 const UPLOAD_EXT: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -608,6 +739,37 @@ function randomSuffix(): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function readBodyCapped(
+  request: Request,
+  limit: number,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  const body = request.body;
+  if (!body) {
+    const buf = await request.arrayBuffer();
+    return buf.byteLength > limit ? null : new Uint8Array(buf);
+  }
+  const reader = body.getReader();
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
 async function handleAdminUpload(request: Request, env: unknown): Promise<Response> {
   const user = await requireAdmin(request, env);
   if (user instanceof Response) return user;
@@ -622,9 +784,23 @@ async function handleAdminUpload(request: Request, env: unknown): Promise<Respon
     );
   }
 
+  const declaredLength = Number(request.headers.get("content-length") ?? "");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_UPLOAD_BODY_BYTES) {
+    return jsonResponse({ error: "File must be non-empty and ≤ 2 MB." }, 413);
+  }
+
+  const capped = await readBodyCapped(request, MAX_UPLOAD_BODY_BYTES);
+  if (capped === null) {
+    return jsonResponse({ error: "File must be non-empty and ≤ 2 MB." }, 413);
+  }
+
   let form: FormData;
   try {
-    form = await request.formData();
+    form = await new Request(request.url, {
+      method: "POST",
+      headers: { "content-type": request.headers.get("content-type") ?? "" },
+      body: capped,
+    }).formData();
   } catch {
     return jsonResponse({ error: "Invalid multipart body." }, 400);
   }
@@ -854,6 +1030,21 @@ function publicCacheHeaders(): HeadersInit {
 
 function noStoreHeaders(): HeadersInit {
   return { "cache-control": "no-store" };
+}
+
+/**
+ * Force `Cache-Control: no-store` on a response without disturbing its body,
+ * status or other headers (notably multiple `Set-Cookie` lines). Used to keep
+ * every authenticated admin API reply out of browser/proxy/CDN caches.
+ */
+function withNoStore(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", "no-store");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 const CONTENT_COLUMNS =
@@ -1175,13 +1366,21 @@ async function getGrantUser(request: Request, env: unknown): Promise<AdminUser |
   }
 }
 
-/** Step-up gate: live grant bound to the session user. Waived only in local fallback mode. */
+/** Step-up gate: live grant bound to the session user. Waived only in explicit local-dev fallback mode. */
 async function requireGrant(
   request: Request,
   env: unknown,
   user: AdminUser,
 ): Promise<AdminUser | Response> {
-  if (getDb(env) === null) return user;
+  if (getDb(env) === null) {
+    // Local dev (opt-in) has no email/DB channel, so step-up can't run.
+    if (isLocalDevFallback(env)) return user;
+    // Production default: a missing DB binding must never bypass step-up.
+    return jsonResponse(
+      { error: "Step-up verification is unavailable — database not configured." },
+      503,
+    );
+  }
   const grant = await getGrantUser(request, env);
   if (!grant || grant.id !== user.id) {
     return jsonResponse({ error: OTP_REQUIRED_ERROR, code: "OTP_REQUIRED" }, 403);
@@ -1210,7 +1409,7 @@ async function findAdminByUsername(
   const envUser = getEnvValue(workerEnv, "ADMIN_USERNAME")?.toLowerCase();
   const envHash = getEnvValue(workerEnv, "ADMIN_PASSWORD_HASH");
   const envSalt = getEnvValue(workerEnv, "ADMIN_PASSWORD_SALT");
-  if (envUser && envHash && envSalt && username === envUser) {
+  if (isLocalDevFallback(env) && envUser && envHash && envSalt && username === envUser) {
     return { id: 1, username: envUser, password_hash: envHash, salt: envSalt };
   }
   return null;
@@ -1230,6 +1429,7 @@ async function hasAnyAdmin(env: unknown): Promise<boolean> {
   }
   const workerEnv = getWorkerEnv(env);
   return Boolean(
+    isLocalDevFallback(env) &&
     getEnvValue(workerEnv, "ADMIN_USERNAME") &&
     getEnvValue(workerEnv, "ADMIN_PASSWORD_HASH") &&
     getEnvValue(workerEnv, "ADMIN_PASSWORD_SALT"),
@@ -1241,13 +1441,15 @@ async function handleAdminLogin(request: Request, env: unknown): Promise<Respons
   if (!isAllowedAdminOrigin(request)) {
     return jsonResponse({ error: "Forbidden origin." }, 403);
   }
-  if (isLoginRateLimited(request)) {
-    return jsonResponse({ error: "Too many attempts. Try again in 10 minutes." }, 429);
-  }
   const body = await readJson(request);
   const data = (body ?? {}) as Record<string, unknown>;
   const username = normalizeUsername(data.username);
   const password = typeof data.password === "string" ? data.password : "";
+
+  // Persistent throttle (D1-backed in production) keyed by IP and username.
+  if (await isLoginRateLimitedPersistent(request, env, username || "anon")) {
+    return jsonResponse({ error: "Too many attempts. Try again in 10 minutes." }, 429);
+  }
 
   if (!username || !password || password.length > 256) {
     // Generic message + dummy work (avoids user enumeration).
@@ -1267,6 +1469,7 @@ async function handleAdminLogin(request: Request, env: unknown): Promise<Respons
     return jsonResponse({ error: GENERIC_AUTH_ERROR }, 401);
   }
 
+  await clearLoginAttempts(request, env, username);
   const token = await createSession(env, { id: admin.id, username: admin.username });
   return jsonResponse({ ok: true, user: { username: admin.username } }, 200, {
     "set-cookie": buildSessionCookie(token, secure),
@@ -1288,7 +1491,10 @@ async function handleOtpRequest(request: Request, env: unknown): Promise<Respons
   const db = getDb(env);
   if (!db) {
     return jsonResponse(
-      { error: "Step-up codes need D1 + email. Local fallback mode skips this step." },
+      {
+        error:
+          "Step-up codes need D1 + email. Local dev fallback (LOCAL_DEV_FALLBACK=1) skips this step.",
+      },
       501,
     );
   }
@@ -1362,7 +1568,9 @@ async function handleOtpVerify(request: Request, env: unknown): Promise<Response
   const db = getDb(env);
   if (!db) {
     return jsonResponse(
-      { error: "Step-up codes need D1. Local fallback mode skips this step." },
+      {
+        error: "Step-up codes need D1. Local dev fallback (LOCAL_DEV_FALLBACK=1) skips this step.",
+      },
       501,
     );
   }
@@ -1903,6 +2111,7 @@ async function handleAdminRequest(request: Request, env: unknown): Promise<Respo
       hasAdmin: await hasAnyAdmin(env),
       metaReady,
       stepUp: Boolean(db),
+      localFallback: isLocalDevFallback(env),
     });
   }
   if (path === "/api/admin/login" && request.method === "POST") {
@@ -1935,8 +2144,8 @@ async function handleAdminRequest(request: Request, env: unknown): Promise<Respo
     return handleOtpRevoke(request, env);
   }
   if (path === "/api/admin/me" && request.method === "GET") {
-    const user = await getSessionUser(request, env);
-    if (!user) return jsonResponse({ error: "Unauthorized." }, 401);
+    const user = await requireAdmin(request, env);
+    if (user instanceof Response) return user;
     return jsonResponse({ user });
   }
   if (path === "/api/admin/items" && (request.method === "GET" || request.method === "POST")) {
@@ -2006,7 +2215,13 @@ async function getServerEntry(): Promise<ServerEntry> {
 function brandedErrorResponse(): Response {
   return new Response(renderErrorPage(), {
     status: 500,
-    headers: { "content-type": "text/html; charset=utf-8", ...securityHeaders() },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      // Error page has inline <style>/onclick and no nonce — use the
+      // 'unsafe-inline' fallback policy, marked so the SSR path keeps it.
+      "x-csp-inline-fallback": "1",
+      ...securityHeaders(),
+    },
   });
 }
 
@@ -2095,15 +2310,20 @@ export default {
       ) {
         // Normalize "/api/admin" -> status 404 shape instead of SSR.
         if (url.pathname === "/api/admin") {
-          return jsonResponse({ error: "Not found." }, 404);
+          return jsonResponse({ error: "Not found." }, 404, noStoreHeaders());
         }
-        return await handleAdminRequest(request, env);
+        // Every admin API response is authenticated/mutating — never let a
+        // browser, proxy or CDN cache it (sessions, inbox, settings, items).
+        return withNoStore(await handleAdminRequest(request, env));
       }
 
+      const nonce = generateCspNonce();
+      const ssrRequest = buildSsrRequest(request, nonce);
       const handler = await getServerEntry();
-      const response = await handler.fetch(request, env, ctx);
+      const response = await handler.fetch(ssrRequest, env, ctx);
       const normalized = await normalizeCatastrophicSsrResponse(response);
-      return withSecurityHeaders(normalized);
+      const inlineFallback = normalized.headers.get("x-csp-inline-fallback") === "1";
+      return withSecurityHeaders(normalized, inlineFallback ? undefined : nonce);
     } catch (error) {
       console.error(error);
       return brandedErrorResponse();

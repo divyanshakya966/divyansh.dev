@@ -33,6 +33,7 @@ export class FakeD1 {
   grants: Row[] = [];
   otps: Row[] = [];
   messages: Row[] = [];
+  loginAttempts: Row[] = [];
   seq = 1;
   useq = 1;
   oseq = 1;
@@ -64,6 +65,13 @@ export class FakeD1 {
     }
     if (sql.includes("COUNT(*) as count FROM content_items WHERE kind")) {
       return { count: this.items.filter((i) => i.kind === p[0]).length };
+    }
+    if (sql.includes("COUNT(*) AS n FROM login_attempts")) {
+      return {
+        n: this.loginAttempts.filter(
+          (a) => a.bucket === p[0] && Number(a.created_at) > Number(p[1]),
+        ).length,
+      };
     }
     if (sql.includes("FROM admin_otps WHERE user_id")) {
       // Latest live OTP row for the user.
@@ -188,6 +196,18 @@ export class FakeD1 {
       this.items = this.items.filter((i) => i.id !== p[0]);
       return { success: true };
     }
+    if (sql.startsWith("INSERT INTO login_attempts")) {
+      this.loginAttempts.push({ bucket: p[0], created_at: p[1] });
+      return { success: true };
+    }
+    if (sql.startsWith("DELETE FROM login_attempts WHERE created_at")) {
+      this.loginAttempts = this.loginAttempts.filter((a) => Number(a.created_at) > Number(p[0]));
+      return { success: true };
+    }
+    if (sql.startsWith("DELETE FROM login_attempts WHERE bucket")) {
+      this.loginAttempts = this.loginAttempts.filter((a) => a.bucket !== p[0]);
+      return { success: true };
+    }
     if (sql.startsWith("INSERT INTO admin_otps")) {
       const id = this.oseq++;
       this.otps.push({
@@ -273,11 +293,17 @@ export class FakeD1 {
 }
 
 export function req(path: string, init?: RequestInit, ip = "10.0.0.1"): Request {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const mutating = !["GET", "HEAD", "OPTIONS"].includes(method);
+  // Mirror browsers: cross/same-origin fetches for state-changing methods
+  // always carry Origin. Tests can override by passing their own origin.
+  const originHeader: Record<string, string> = mutating ? { origin: "http://localhost" } : {};
   return new Request(`http://localhost${path}`, {
     ...init,
     headers: {
       "content-type": "application/json",
       "cf-connecting-ip": ip,
+      ...originHeader,
       ...(init?.headers ?? {}),
     },
   });

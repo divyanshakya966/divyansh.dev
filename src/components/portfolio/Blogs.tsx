@@ -3,6 +3,7 @@ import { Reveal } from "./Reveal";
 import { PenLine, ExternalLink } from "lucide-react";
 import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
+import { safeHref } from "@/lib/utils";
 
 /**
  * Hidden until you publish at least one visible blog post from /admin.
@@ -49,7 +50,7 @@ export function Blogs() {
               </div>
               {post.url ? (
                 <a
-                  href={post.url}
+                  href={safeHref(post.url, "#")}
                   target="_blank"
                   rel="noreferrer noopener"
                   aria-label={`Read ${post.title}`}

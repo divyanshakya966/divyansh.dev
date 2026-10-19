@@ -36,9 +36,8 @@ npx wrangler deploy
 ## 4. Use it
 
 1. Open `/admin` → any item → **Upload image (≤2 MB)** under the Image URL field.
-2. PNG, JPEG, WebP, GIF or AVIF. Files land at `/media/uploads/<user>/<ts>-<rand>.<ext>`.
+2. PNG, JPEG, WebP, GIF or AVIF.
 3. Save the item — the URL is already filled in.
 
 Uploads require a signed-in session **and** a verified step-up grant, same as
-saves. Served responses carry `cache-control: public, max-age=31536000,
-immutable` (keys are unique per upload, so caching is safe).
+saves. Served responses are cache-immutable (keys are unique per upload).

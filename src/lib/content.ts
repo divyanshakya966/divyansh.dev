@@ -59,7 +59,7 @@ function parseTags(tags: unknown): string[] {
         return parsed.filter((t): t is string => typeof t === "string");
       }
     } catch {
-      // not JSON — fall through to comma-separated parsing below
+      // fall through to comma-separated parsing
     }
     return tags
       .split(",")
@@ -81,7 +81,7 @@ export function parseMeta(meta: unknown): Record<string, unknown> {
         return parsed as Record<string, unknown>;
       }
     } catch {
-      // not a JSON object — fall through to {}
+      // fall through to {}
     }
   }
   return {};
@@ -170,7 +170,7 @@ const MAX_META_LEN = 4000;
 function cleanUrl(url: string): string {
   const trimmed = url.trim();
   if (!trimmed) return "";
-  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith("/")) {
+  if (/^https?:\/\//i.test(trimmed) || /^\/(?![/\\])/.test(trimmed)) {
     return trimmed.slice(0, MAX_URL);
   }
   return "";

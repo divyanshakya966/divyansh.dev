@@ -7,6 +7,7 @@ beforeEach(() => {
   delete process.env.ADMIN_USERNAME;
   delete process.env.ADMIN_PASSWORD_HASH;
   delete process.env.ADMIN_PASSWORD_SALT;
+  delete process.env.LOCAL_DEV_FALLBACK;
 });
 
 describe("admin API without DB (local fallback)", () => {
@@ -17,6 +18,7 @@ describe("admin API without DB (local fallback)", () => {
       hasAdmin: false,
       metaReady: true,
       stepUp: false,
+      localFallback: false,
     });
 
     const res = await server.fetch(req("/api/content?kind=certification"), {}, {});
@@ -96,6 +98,30 @@ describe("admin API with D1", () => {
     expect(meAfter.status).toBe(401);
   });
 
+  it("origin-checks /me and rejects mutating requests without an origin", async () => {
+    const db = new FakeD1();
+    await seedAdmin(db, "divyansh", "correct-horse-battery-99");
+    const cookie = cookieFrom(await login(db, "divyansh", "correct-horse-battery-99", "10.0.5.1"));
+
+    const crossMe = await server.fetch(
+      req("/api/admin/me", { headers: { cookie, origin: "https://evil.com" } }, "10.0.5.1"),
+      { DB: db },
+      {},
+    );
+    expect(crossMe.status).toBe(403);
+
+    const badOrigin = await server.fetch(
+      new Request("http://localhost/api/admin/items", {
+        method: "POST",
+        headers: { cookie, "cf-connecting-ip": "10.0.5.1", "content-type": "application/json" },
+        body: JSON.stringify({ kind: "blog", title: "t" }),
+      }),
+      { DB: db },
+      {},
+    );
+    expect(badOrigin.status).toBe(403);
+  });
+
   it("rate-limits login after 5 attempts", async () => {
     const db = new FakeD1();
     await seedAdmin(db, "divyansh", "correct-horse-battery-99");
@@ -105,6 +131,30 @@ describe("admin API with D1", () => {
     }
     const limited = await login(db, "divyansh", "wrong-password-long-enough", "10.0.9.9");
     expect(limited.status).toBe(429);
+  });
+
+  it("persists login attempts in D1 and blocks across isolates", async () => {
+    const db = new FakeD1();
+    await seedAdmin(db, "divyansh", "correct-horse-battery-99");
+    for (let i = 0; i < 5; i++) {
+      await login(db, "divyansh", "wrong-password-long-enough", "10.0.9.9");
+    }
+    // Attempts must be durable in the DB, not just an in-process Map.
+    expect(db.loginAttempts.length).toBeGreaterThanOrEqual(5);
+    // A different IP is still blocked for the same username (per-user bucket).
+    const otherIp = await login(db, "divyansh", "wrong-password-long-enough", "10.0.9.10");
+    expect(otherIp.status).toBe(429);
+  });
+
+  it("clears throttling after a successful login", async () => {
+    const db = new FakeD1();
+    await seedAdmin(db, "divyansh", "correct-horse-battery-99");
+    for (let i = 0; i < 4; i++) {
+      await login(db, "divyansh", "wrong-password-long-enough", "10.0.9.11");
+    }
+    const ok = await login(db, "divyansh", "correct-horse-battery-99", "10.0.9.11");
+    expect(ok.status).toBe(200);
+    expect(db.loginAttempts).toHaveLength(0);
   });
 
   it("CRUD + reorder + visibility toggle require auth", async () => {
@@ -395,7 +445,13 @@ describe("admin API with D1", () => {
     const status = (await (
       await server.fetch(req("/api/admin/status"), { DB: db }, {})
     ).json()) as { db: boolean; hasAdmin: boolean; metaReady: boolean; stepUp: boolean };
-    expect(status).toEqual({ db: true, hasAdmin: false, metaReady: true, stepUp: true });
+    expect(status).toEqual({
+      db: true,
+      hasAdmin: false,
+      metaReady: true,
+      stepUp: true,
+      localFallback: false,
+    });
   });
 
   it("rejects invalid item payloads and seed-id edits", async () => {
@@ -481,19 +537,47 @@ describe("hardening: body caps, encoding guards, security headers", () => {
     expect(bad.headers.get("content-type")).toContain("application/json");
   });
 
-  it("sends clickjacking/sniffing guards on API responses", async () => {
+  it("never lets admin API responses be cached", async () => {
+    const db = new FakeD1();
+    await seedAdmin(db, "divyansh", "correct-horse-battery-99");
+    const cookie = cookieFrom(await login(db, "divyansh", "correct-horse-battery-99", "10.0.8.1"));
+
+    // Unauthenticated error, authed data read, /me, and status must all be no-store.
+    const cases: { path: string; init: RequestInit }[] = [
+      { path: "/api/admin/items?kind=all", init: {} },
+      { path: "/api/admin/items?kind=all", init: { headers: { cookie } } },
+      { path: "/api/admin/messages", init: { headers: { cookie } } },
+      { path: "/api/admin/settings", init: { headers: { cookie } } },
+      { path: "/api/admin/me", init: { headers: { cookie } } },
+      { path: "/api/admin/status", init: {} },
+    ];
+    for (const { path, init } of cases) {
+      const res = await server.fetch(req(path, init, "10.0.8.1"), { DB: db }, {});
+      expect(res.headers.get("cache-control"), path).toBe("no-store");
+    }
+  });
+
+  it("sends clickjacking/sniffing/CSP/HSTS guards on API responses", async () => {
     const denied = await server.fetch(
       req("/api/admin/login", { method: "POST", body: JSON.stringify({}) }, "10.0.7.3"),
       {},
       {},
     );
     expect(denied.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(denied.headers.get("content-security-policy")).toBe("frame-ancestors 'self'");
-    expect(denied.headers.get("x-frame-options")).toBe("SAMEORIGIN");
+    const csp = denied.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("base-uri 'self'");
+    expect(csp).toContain("form-action 'self'");
+    expect(csp).toContain("object-src 'none'");
+    expect(denied.headers.get("x-frame-options")).toBe("DENY");
     expect(denied.headers.get("referrer-policy")).toBe("same-origin");
+    expect(denied.headers.get("strict-transport-security")).toBe(
+      "max-age=31536000; includeSubDomains",
+    );
 
     const robots = await server.fetch(req("/robots.txt"), {}, {});
-    expect(robots.headers.get("x-frame-options")).toBe("SAMEORIGIN");
+    expect(robots.headers.get("x-frame-options")).toBe("DENY");
   });
 });
 

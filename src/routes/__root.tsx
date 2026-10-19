@@ -186,20 +186,26 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: React.ReactNode }) {
+  const nonce = useRouter().options.ssr?.nonce;
   return (
     <html lang="en">
       <head>
         <HeadContent />
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: "document.documentElement.classList.add('js');",
           }}
         />
         <noscript>
-          <style>{`#boot-screen{display:none!important}`}</style>
+          <style nonce={nonce}>{`#boot-screen{display:none!important}`}</style>
         </noscript>
-        <script type="application/ld+json">{JSON.stringify(personSchema)}</script>
-        <script type="application/ld+json">{JSON.stringify(websiteSchema)}</script>
+        <script nonce={nonce} type="application/ld+json">
+          {JSON.stringify(personSchema)}
+        </script>
+        <script nonce={nonce} type="application/ld+json">
+          {JSON.stringify(websiteSchema)}
+        </script>
       </head>
       <body>
         <a

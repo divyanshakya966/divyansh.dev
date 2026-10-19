@@ -10,9 +10,14 @@ export function isSafeHttpUrl(url: string): boolean {
   return /^https?:\/\/[^\s]+$/i.test(url.trim());
 }
 
+export function isSameOriginPath(url: string): boolean {
+  const t = url.trim();
+  return /^\/(?![/\\])/.test(t);
+}
+
 /** Returns the URL only if it is http(s) or same-origin; otherwise fallback. */
 export function safeHref(url: string, fallback = ""): string {
   const t = url.trim();
-  if (isSafeHttpUrl(t) || t.startsWith("/")) return t;
+  if (isSafeHttpUrl(t) || isSameOriginPath(t)) return t;
   return fallback;
 }

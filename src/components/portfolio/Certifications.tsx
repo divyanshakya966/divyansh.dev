@@ -3,6 +3,7 @@ import { Reveal } from "./Reveal";
 import { Award, BadgeCheck, ExternalLink, ShieldCheck } from "lucide-react";
 import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
+import { safeHref } from "@/lib/utils";
 
 export function Certifications() {
   const { items } = usePublicContent("certification");
@@ -55,7 +56,7 @@ export function Certifications() {
               </div>
               {cert.url ? (
                 <a
-                  href={cert.url}
+                  href={safeHref(cert.url, "#")}
                   target="_blank"
                   rel="noreferrer noopener"
                   aria-label={`Verify ${cert.title}`}

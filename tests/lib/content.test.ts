@@ -89,6 +89,22 @@ describe("content model", () => {
     expect(validateContentInput({ kind: "blog", title: "t", sort_order: "NaN" }).ok).toBe(false);
   });
 
+  it("strips protocol-relative and backslash URL tricks", () => {
+    const res = validateContentInput({
+      kind: "blog",
+      title: "t",
+      url: "//evil.com/x",
+      image: "/\\evil.com/x",
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.value.url).toBe("");
+      expect(res.value.image).toBe("");
+    }
+    const okPath = validateContentInput({ kind: "blog", title: "t", url: "/local/x" });
+    expect(okPath.ok && okPath.value.url).toBe("/local/x");
+  });
+
   it("rejects over-long fields instead of silently truncating", () => {
     expect(validateContentInput({ kind: "blog", title: "t", subtitle: "s".repeat(161) }).ok).toBe(
       false,

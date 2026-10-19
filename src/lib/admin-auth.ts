@@ -1,23 +1,12 @@
-/**
- * Strict admin auth built for Cloudflare Workers (WebCrypto only, no Node deps).
- *
- * - Passwords: PBKDF2-SHA256, 100k iterations (Workers maximum), 16-byte
- *   salt, 32-byte hash.
- * - Sessions: 32-byte opaque token, only SHA-256(token) stored in D1.
- *   Cookie: `admin_session`, httpOnly, Secure (prod), SameSite=Lax, 12h expiry.
- * - Step-up grants: after an emailed one-time code verifies, a second
- *   short-lived grant (`admin_otp` cookie, 10 min) is required on top of the
- *   session for every mutating admin call.
- * - Login rate limiting + generic error messages (no user enumeration).
- */
+/** Admin auth for Cloudflare Workers (WebCrypto only, no Node deps). */
 
 export const SESSION_COOKIE = "admin_session";
 export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 export const GRANT_COOKIE = "admin_otp";
 export const GRANT_TTL_MS = 10 * 60 * 1000;
-// Cloudflare Workers rejects PBKDF2 iteration counts above 100000
-// (NotSupportedError), while Node allows more. Stay at the cap so hashes
-// created anywhere verify everywhere. Do NOT raise without a runtime check.
+// Workers rejects PBKDF2 iteration counts above 100000 (NotSupportedError)
+// while Node allows more. Stay at the cap so hashes verify everywhere; do not
+// raise without a runtime check.
 export const PBKDF2_ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BYTES = 32;
@@ -203,14 +192,17 @@ export function isSecureRequest(request: Request): boolean {
 }
 
 /**
- * Same-origin check for cookie-authenticated POSTs (CSRF defence in depth
- * on top of SameSite=Lax). Allows requests with no Origin/Referer (curl,
- * same-origin fetch) but rejects cross-origin values.
+ * Same-origin check for cookie-authenticated requests (CSRF defence in depth
+ * on top of SameSite=Lax). Cross-origin Origin/Referer values are always
+ * rejected. State-changing methods must present a same-host Origin/Referer
+ * (browsers always send Origin on these); safe methods may omit it for
+ * curl/programmatic reads.
  */
 export function isAllowedAdminOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
   const referer = request.headers.get("referer");
-  if (!origin && !referer) return true;
+  const mutating = !["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase());
+  if (!origin && !referer) return !mutating;
   try {
     const host = new URL(request.url).host;
     if (origin && new URL(origin).host === host) return true;

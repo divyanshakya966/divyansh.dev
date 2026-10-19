@@ -3,6 +3,7 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import { usePublicContent } from "@/hooks/use-content";
 import { isContentKind } from "@/lib/content";
 import { site } from "@/lib/site";
+import { safeHref } from "@/lib/utils";
 
 export const Route = createFileRoute("/reading/$kind/$itemId")({
   head: ({ params }) => ({
@@ -53,7 +54,7 @@ function ReaderPage() {
             </p>
             {item.url && (
               <a
-                href={item.url}
+                href={safeHref(item.url, "#")}
                 target="_blank"
                 rel="noreferrer noopener"
                 className="mt-8 inline-flex items-center gap-2 rounded-xl glass px-4 py-2.5 text-sm hover:bg-muted"

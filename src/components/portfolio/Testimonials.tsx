@@ -3,6 +3,7 @@ import { Section } from "./Section";
 import { Reveal } from "./Reveal";
 import { usePublicContent, useSiteSettings } from "@/hooks/use-content";
 import { isSectionVisible } from "@/lib/settings";
+import { safeHref } from "@/lib/utils";
 
 /**
  * Kind words — hidden until at least one visible testimonial is published
@@ -49,7 +50,7 @@ export function Testimonials() {
                   <span className="block text-sm font-semibold">
                     {featured.url ? (
                       <a
-                        href={featured.url}
+                        href={safeHref(featured.url, "#")}
                         target="_blank"
                         rel="noreferrer noopener"
                         className="underline-offset-4 hover:underline"

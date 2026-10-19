@@ -60,6 +60,7 @@ function uploadReq(
     headers: {
       cookie,
       "cf-connecting-ip": ip,
+      origin: "http://localhost",
       "content-type": `multipart/form-data; boundary=${boundary}`,
     },
     body,
@@ -141,6 +142,13 @@ describe("media uploads", () => {
       {},
     );
     expect(big.status).toBe(400);
+
+    const huge = await server.fetch(
+      uploadReq(auth.cookie, "huge.png", "image/png", "x".repeat(3 * 1024 * 1024), "10.2.0.5"),
+      env,
+      {},
+    );
+    expect(huge.status).toBe(413);
 
     const missing = await server.fetch(req("/media/uploads/1/nope.png"), env, {});
     expect(missing.status).toBe(404);

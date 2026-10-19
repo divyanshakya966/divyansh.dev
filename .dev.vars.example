@@ -35,3 +35,9 @@ CONTACT_RATE_LIMIT_WINDOW_MS=600000
 # ADMIN_USERNAME=
 # ADMIN_PASSWORD_HASH=
 # ADMIN_PASSWORD_SALT=
+
+# Required to ENABLE the no-D1 in-memory fallback (seeds + env admin +
+# waived step-up) for local dev. Leave unset/0 in production: without it a
+# missing DB binding denies auth and mutations instead of failing open.
+#   LOCAL_DEV_FALLBACK=1
+# LOCAL_DEV_FALLBACK=

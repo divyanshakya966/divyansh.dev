@@ -69,6 +69,21 @@ describe("admin-auth", () => {
     expect(isAllowedAdminOrigin(cross)).toBe(false);
   });
 
+  it("requires an origin on state-changing methods but allows omitted on safe reads", () => {
+    const bare = (method: string) => new Request("https://example.com/api/admin/items", { method });
+    expect(isAllowedAdminOrigin(bare("GET"))).toBe(true);
+    expect(isAllowedAdminOrigin(bare("HEAD"))).toBe(true);
+    expect(isAllowedAdminOrigin(bare("POST"))).toBe(false);
+    expect(isAllowedAdminOrigin(bare("PUT"))).toBe(false);
+    expect(isAllowedAdminOrigin(bare("DELETE"))).toBe(false);
+
+    const sameOriginPost = new Request("https://example.com/api/admin/items", {
+      method: "POST",
+      headers: { origin: "https://example.com" },
+    });
+    expect(isAllowedAdminOrigin(sameOriginPost)).toBe(true);
+  });
+
   it("generates uniform 6-digit codes", () => {
     const seen = new Set<string>();
     for (let i = 0; i < 200; i++) {

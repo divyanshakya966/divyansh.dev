@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cn, isSafeHttpUrl, safeHref } from "@/lib/utils";
+import { cn, isSafeHttpUrl, isSameOriginPath, safeHref } from "@/lib/utils";
 
 describe("cn", () => {
   it("returns an empty string when given nothing", () => {
@@ -39,5 +39,16 @@ describe("safe URLs", () => {
     expect(safeHref("/local/path", "fallback")).toBe("/local/path");
     expect(safeHref("javascript:alert(1)", "fallback")).toBe("fallback");
     expect(safeHref("  ", "fallback")).toBe("fallback");
+  });
+
+  it("rejects protocol-relative and backslash paths", () => {
+    expect(isSameOriginPath("/local/path")).toBe(true);
+    expect(isSameOriginPath("//evil.com")).toBe(false);
+    expect(isSameOriginPath("/\\evil.com")).toBe(false);
+    expect(isSameOriginPath("/\\/evil.com")).toBe(false);
+    expect(isSameOriginPath("https://evil.com")).toBe(false);
+    expect(safeHref("//evil.com", "fallback")).toBe("fallback");
+    expect(safeHref("/\\evil.com", "fallback")).toBe("fallback");
+    expect(safeHref("/\\/evil.com", "fallback")).toBe("fallback");
   });
 });
