@@ -1,8 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, Copy, Mail, Github, Linkedin, Terminal } from "lucide-react";
+import {
+  ArrowUpRight,
+  Copy,
+  Mail,
+  Github,
+  Linkedin,
+  Terminal,
+  Minus,
+  Minimize2,
+  Square,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useKindPresence, useSiteSettings } from "@/hooks/use-content";
+import { NAV_OFFSET, useWindowManager } from "@/hooks/use-window-manager";
+import { ResizeHandles } from "@/components/portfolio/ResizeHandles";
 import { isSectionVisible, type SectionId } from "@/lib/settings";
 import { safeHref } from "@/lib/utils";
 
@@ -77,7 +90,20 @@ function go(href: string) {
 }
 
 export function CommandPalette() {
-  const [open, setOpen] = useState(false);
+  const {
+    isOpen: open,
+    isMinimized,
+    isMaximized,
+    isFocused,
+    rect,
+    startDrag,
+    startResize,
+    focus,
+    minimize,
+    maximize,
+    toggle,
+    close,
+  } = useWindowManager("command-palette");
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -145,23 +171,22 @@ export function CommandPalette() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // The boot screen sits above this window — the palette would be invisible.
+      if (document.getElementById("boot-screen")) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setOpen((v) => !v);
-      } else if (e.key === "Escape") {
-        setOpen(false);
+        toggle();
+      } else if (e.key === "Escape" && open && isFocused) {
+        minimize();
       }
       // NOTE: no "/" shortcut — it would hijack Firefox quick-find.
     };
-    const onCustom = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    window.addEventListener("open-command-palette", onCustom);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("open-command-palette", onCustom);
     };
-  }, [open]);
+  }, [open, isFocused, minimize, toggle]);
 
   useEffect(() => {
     let focusTimer: ReturnType<typeof setTimeout> | undefined;
@@ -169,15 +194,16 @@ export function CommandPalette() {
       setQ("");
       setIdx(0);
       focusTimer = setTimeout(() => inputRef.current?.focus(), 30);
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
     }
     return () => {
       if (focusTimer) clearTimeout(focusTimer);
-      document.body.style.overflow = "";
     };
   }, [open]);
+
+  // Restoring should hand focus back to the search input.
+  useEffect(() => {
+    if (open && !isMinimized) inputRef.current?.focus();
+  }, [open, isMinimized]);
 
   const actions: Action[] = useMemo(
     () => [
@@ -273,33 +299,83 @@ export function CommandPalette() {
   const runAt = (i: number) => {
     const a = filtered[i];
     if (!a) return;
-    setOpen(false);
+    close();
     window.setTimeout(() => a.run(), 60);
   };
 
   return (
     <AnimatePresence>
-      {open && (
+      {open && !isMinimized && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[90] grid place-items-start justify-center px-4 pt-[14svh] bg-black/60 backdrop-blur-sm"
-          onClick={() => setOpen(false)}
+          className={`fixed inset-0 pointer-events-none ${isFocused ? "z-[97]" : "z-[93]"}`}
           role="presentation"
         >
           <motion.div
             role="dialog"
             aria-modal="true"
             aria-label="Command palette"
-            initial={{ opacity: 0, y: 16, scale: 0.97, filter: "blur(8px)" }}
-            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: 10, scale: 0.98, filter: "blur(6px)" }}
+            initial={{ opacity: 0, scale: 0.97, filter: "blur(8px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, scale: 0.98, filter: "blur(6px)" }}
             transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.6 }}
-            className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-[#0c0c0e]/95 shadow-elegant"
+            style={
+              isMaximized
+                ? {
+                    left: 8,
+                    top: NAV_OFFSET,
+                    width: "calc(100vw - 16px)",
+                    height: `calc(100svh - ${NAV_OFFSET + 8}px)`,
+                  }
+                : { left: rect.x, top: rect.y, width: rect.w, height: rect.h }
+            }
+            className={`pointer-events-auto absolute flex flex-col overflow-hidden bg-[#0c0c0e]/95 shadow-elegant ${
+              isMaximized
+                ? "rounded-lg border border-white/10"
+                : "rounded-2xl border border-white/10"
+            }`}
+            onMouseDown={focus}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2 border-b border-white/10 px-4">
+            <div
+              onPointerDown={startDrag}
+              data-cursor={isMaximized ? undefined : "grab"}
+              className={`relative z-20 flex shrink-0 items-center gap-1.5 border-b border-white/10 bg-white/[0.02] px-3 py-2.5 ${
+                isMaximized ? "" : "cursor-grab active:cursor-grabbing"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={close}
+                aria-label="Close command palette"
+                title="Close"
+                className="grid h-6 w-6 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-muted-foreground transition-colors hover:border-red-400/40 hover:bg-red-500/25 hover:text-red-200"
+              >
+                <X size={11} />
+              </button>
+              <button
+                type="button"
+                onClick={minimize}
+                aria-label="Minimize command palette"
+                title="Minimize"
+                className="grid h-6 w-6 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-muted-foreground transition-colors hover:border-amber-400/40 hover:bg-amber-500/25 hover:text-amber-200"
+              >
+                <Minus size={11} />
+              </button>
+              <button
+                type="button"
+                onClick={maximize}
+                aria-label={isMaximized ? "Restore command palette" : "Maximize command palette"}
+                title={isMaximized ? "Restore" : "Maximize"}
+                className="grid h-6 w-6 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-muted-foreground transition-colors hover:border-emerald-400/40 hover:bg-emerald-500/25 hover:text-emerald-200"
+              >
+                {isMaximized ? <Minimize2 size={11} /> : <Square size={10} />}
+              </button>
+              <span className="ml-2 font-mono text-[11px] text-muted-foreground">search</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 px-4">
               <Terminal size={14} className="text-muted-foreground" />
               <input
                 ref={inputRef}
@@ -323,7 +399,7 @@ export function CommandPalette() {
                 ESC
               </kbd>
             </div>
-            <div className="max-h-[46vh] overflow-y-auto p-2">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
               {filtered.length === 0 && (
                 <div className="px-3 py-8 text-center font-mono text-xs text-muted-foreground">
                   No matches for “{q}” — try ~/projects
@@ -360,11 +436,13 @@ export function CommandPalette() {
                 );
               })}
             </div>
-            <div className="flex items-center gap-4 border-t border-white/10 px-4 py-2.5 font-mono text-[10px] text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-4 border-t border-white/10 px-4 py-2.5 font-mono text-[10px] text-muted-foreground">
               <span>↑↓ navigate</span>
               <span>↵ select</span>
               <span className="ml-auto">⌘K toggle</span>
+              <span>⌘` terminal</span>
             </div>
+            {!isMaximized && <ResizeHandles onResize={startResize} label="command palette" />}
           </motion.div>
         </motion.div>
       )}

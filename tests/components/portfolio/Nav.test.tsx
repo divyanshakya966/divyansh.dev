@@ -42,6 +42,37 @@ describe("Nav", () => {
     expect(btn).toHaveAttribute("aria-controls", "mobile-menu");
   });
 
+  it("opens the command palette from the navbar search button", async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+    window.addEventListener("toggle-command-palette", onToggle);
+    render(<Nav />);
+    await user.click(screen.getByRole("button", { name: "Open command palette" }));
+    window.removeEventListener("toggle-command-palette", onToggle);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the terminal from the navbar terminal button", async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+    window.addEventListener("toggle-terminal", onToggle);
+    render(<Nav />);
+    await user.click(screen.getByRole("button", { name: "Open terminal" }));
+    window.removeEventListener("toggle-terminal", onToggle);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("reflects a running/minimized window as a taskbar entry", async () => {
+    render(<Nav />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("terminal-state", { detail: { open: true, minimized: true } }),
+      );
+    });
+    const btn = await screen.findByRole("button", { name: "Restore terminal" });
+    expect(btn).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("opens and closes the mobile menu", async () => {
     const user = userEvent.setup();
     render(<Nav />);

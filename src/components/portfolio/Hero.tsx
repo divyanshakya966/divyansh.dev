@@ -211,7 +211,7 @@ export function Hero({ booted }: { booted: boolean }) {
           </div>
 
           <div
-            className={`mt-10 font-mono text-sm sm:text-base text-muted-foreground ${booted ? "animate-fade-in [animation-delay:1100ms]" : "boot-gated"}`}
+            className={`mt-10 font-mono text-sm sm:text-base text-muted-foreground ${booted ? "animate-fade-in [animation-delay:520ms]" : "boot-gated"}`}
           >
             <span className="text-foreground">~/</span>
             <span>{typed}</span>
@@ -223,7 +223,7 @@ export function Hero({ booted }: { booted: boolean }) {
       <div className="relative w-full mt-10 md:mt-8 px-4 md:px-12">
         <div className="mx-auto max-w-6xl flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4 sm:gap-6">
           <div
-            className={`font-mono text-[11px] sm:text-xs text-muted-foreground max-w-xs text-center sm:text-left ${booted ? "animate-fade-in [animation-delay:1300ms]" : "boot-gated"}`}
+            className={`font-mono text-[11px] sm:text-xs text-muted-foreground max-w-xs text-center sm:text-left ${booted ? "animate-fade-in [animation-delay:580ms]" : "boot-gated"}`}
           >
             {tagline[0] ?? "Building secure, scalable systems"}
             <br />
@@ -233,7 +233,7 @@ export function Hero({ booted }: { booted: boolean }) {
           <Magnetic
             strength={0.35}
             max={14}
-            className={`${booted ? "animate-fade-in [animation-delay:1400ms]" : "boot-gated"}`}
+            className={`${booted ? "animate-fade-in [animation-delay:640ms]" : "boot-gated"}`}
           >
             <motion.a
               href="#projects"
@@ -251,7 +251,7 @@ export function Hero({ booted }: { booted: boolean }) {
           </Magnetic>
 
           <div
-            className={`font-mono text-[11px] sm:text-xs text-muted-foreground text-center sm:text-right ${booted ? "animate-fade-in [animation-delay:1500ms]" : "boot-gated"}`}
+            className={`font-mono text-[11px] sm:text-xs text-muted-foreground text-center sm:text-right ${booted ? "animate-fade-in [animation-delay:700ms]" : "boot-gated"}`}
           >
             {location[0] ?? "Bhopal, India · Open to"}
             <br />

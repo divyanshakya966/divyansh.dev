@@ -42,7 +42,7 @@
   --font-sans:
     "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --animate-fade-in: fade-in 0.7s ease-out both;
+  --animate-fade-in: fade-in 0.45s ease-out both;
   --animate-slide-up: slide-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-blink: blink 1s step-end infinite;
   --animate-float: float 6s ease-in-out infinite;
@@ -364,9 +364,9 @@
     transform: translateY(40px);
     filter: blur(0);
     transition:
-      opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
-      transform 0.9s cubic-bezier(0.22, 1, 0.36, 1),
-      filter 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+      opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      filter 0.55s cubic-bezier(0.22, 1, 0.36, 1);
     will-change: opacity, transform;
   }
   .reveal[data-reveal="left"],
@@ -383,7 +383,7 @@
   }
   .reveal[data-reveal="blur"],
   .reveal-child[data-reveal="blur"] {
-    filter: blur(14px);
+    filter: blur(8px);
     transform: translateY(20px);
   }
   .reveal[data-reveal="clip"],
@@ -391,8 +391,8 @@
     clip-path: inset(0 100% 0 0);
     transform: none;
     transition:
-      clip-path 1.1s cubic-bezier(0.77, 0, 0.18, 1),
-      opacity 0.6s ease;
+      clip-path 0.7s cubic-bezier(0.77, 0, 0.18, 1),
+      opacity 0.35s ease;
   }
   .reveal.in,
   .reveal-child.in {
@@ -442,7 +442,7 @@
   .char-rise > span {
     display: inline-block;
     opacity: 0;
-    animation: char-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: char-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   @keyframes glitch-main-burst {

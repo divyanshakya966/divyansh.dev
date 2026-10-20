@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, Menu, X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { ArrowUpRight, Menu, TerminalSquare, X } from "lucide-react";
+import { lockBodyScroll } from "@/hooks/use-window-manager";
 
 const baseLinks = [
   { href: "#about", label: "About", section: "about" },
@@ -51,6 +52,55 @@ function useTypewriter() {
   return text;
 }
 
+/**
+ * A taskbar entry for one of the floating shell windows. Mirrors desktop
+ * behaviour: a running window shows an indicator and toggles minimize/restore
+ * on click; a hidden window shows the launch affordance.
+ */
+function TaskbarButton({
+  state,
+  label,
+  openLabel,
+  onToggle,
+  children,
+}: {
+  state: { open: boolean; minimized: boolean };
+  label: string;
+  openLabel: string;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const { open, minimized } = state;
+  const title = minimized ? `Restore ${label}` : open ? `Minimize ${label}` : openLabel;
+  return (
+    <motion.button
+      type="button"
+      onClick={onToggle}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      aria-label={title}
+      aria-pressed={open}
+      className={`relative inline-flex items-center gap-1.5 rounded-lg glass px-2.5 py-1.5 font-mono text-[11px] transition-colors touch-target ${
+        open
+          ? "text-foreground border-white/25"
+          : "text-muted-foreground hover:text-foreground hover:border-white/25"
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`h-1.5 w-1.5 rounded-full transition-all ${
+          open
+            ? minimized
+              ? "bg-amber-400 shadow-[0_0_6px_oklch(0.85_0.15_85/0.9)]"
+              : "bg-emerald-400 shadow-[0_0_6px_oklch(0.8_0.15_160/0.9)]"
+            : "bg-white/20"
+        }`}
+      />
+      {children}
+    </motion.button>
+  );
+}
+
 export function Nav() {
   const [active, setActive] = useState("");
   const [open, setOpen] = useState(false);
@@ -58,7 +108,11 @@ export function Nav() {
   const [hidden, setHidden] = useState(false);
   const [dynamicLinks, setDynamicLinks] = useState<{ href: string; label: string }[]>([]);
   const [hiddenSections, setHiddenSections] = useState<Set<string>>(new Set());
+  // Taskbar state for the floating shells.
+  const [terminalState, setTerminalState] = useState({ open: false, minimized: false });
+  const [paletteState, setPaletteState] = useState({ open: false, minimized: false });
   const typed = useTypewriter();
+  const reduce = useReducedMotion();
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const lastY = useRef(0);
   const visibleBase = baseLinks.filter((l) => !hiddenSections.has(l.section));
@@ -77,14 +131,27 @@ export function Nav() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  // Lock body scroll when the fullscreen menu is open.
+  // Reflect the visibility/dock state of the shell windows (taskbar).
   useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
+    const read = (e: Event) => {
+      const detail = (e as CustomEvent<{ open?: boolean; minimized?: boolean }>).detail;
+      return { open: !!detail?.open, minimized: !!detail?.minimized };
     };
+    const onTerminal = (e: Event) => setTerminalState(read(e));
+    const onPalette = (e: Event) => setPaletteState(read(e));
+    window.addEventListener("terminal-state", onTerminal);
+    window.addEventListener("command-palette-state", onPalette);
+    return () => {
+      window.removeEventListener("terminal-state", onTerminal);
+      window.removeEventListener("command-palette-state", onPalette);
+    };
+  }, []);
+
+  // Lock body scroll when the fullscreen menu is open (shares the app-wide
+  // lock so closing it never unlocks the page while a shell window is open).
+  useEffect(() => {
+    lockBodyScroll("mobile-menu", open);
+    return () => lockBodyScroll("mobile-menu", false);
   }, [open]);
 
   useEffect(() => {
@@ -197,9 +264,15 @@ export function Nav() {
   return (
     <>
       <motion.header
-        animate={{ y: hidden && !open ? "-115%" : "0%" }}
-        transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        className={`fixed top-0 inset-x-0 z-50 transition-[padding] duration-300 ${
+        // Plays once on mount, before scroll-wise hiding can interfere
+        // (same edge it hides to); reduced motion snaps to the resting state.
+        initial={reduce ? false : { y: "-115%", opacity: 0 }}
+        animate={{ y: hidden && !open ? "-115%" : "0%", opacity: 1 }}
+        transition={{
+          y: { type: "spring", stiffness: 320, damping: 32 },
+          opacity: { duration: 0.45, ease: "easeOut" },
+        }}
+        className={`fixed top-0 inset-x-0 z-[110] transition-[padding] duration-300 ${
           scrolled ? "py-3" : "py-5"
         }`}
       >
@@ -258,15 +331,24 @@ export function Nav() {
                 <span className="inline-block h-3.5 w-px shrink-0 bg-foreground/80 ml-0.5 animate-blink" />
               </span>
 
-              <motion.button
-                onClick={() => window.dispatchEvent(new Event("open-command-palette"))}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                aria-label="Open command palette"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-lg glass px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground hover:border-white/25 transition-colors touch-target"
+              <TaskbarButton
+                state={paletteState}
+                label="command palette"
+                openLabel="Open command palette"
+                onToggle={() => window.dispatchEvent(new Event("toggle-command-palette"))}
               >
                 <span className="text-xs">⌘</span>K
-              </motion.button>
+              </TaskbarButton>
+
+              <TaskbarButton
+                state={terminalState}
+                label="terminal"
+                openLabel="Open terminal"
+                onToggle={() => window.dispatchEvent(new Event("toggle-terminal"))}
+              >
+                <TerminalSquare size={13} />
+                <span className="text-xs">⌘</span>`
+              </TaskbarButton>
 
               <motion.button
                 ref={menuBtnRef}
@@ -360,15 +442,26 @@ export function Nav() {
               </nav>
               <div className="flex items-center justify-between border-t border-white/10 px-5 py-4 font-mono text-[11px] text-muted-foreground">
                 <span>ESC closes</span>
-                <button
-                  onClick={() => {
-                    setOpen(false);
-                    window.dispatchEvent(new Event("open-command-palette"));
-                  }}
-                  className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 hover:text-foreground hover:border-white/25 transition-colors"
-                >
-                  ⌘K search
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setOpen(false);
+                      window.dispatchEvent(new Event("toggle-command-palette"));
+                    }}
+                    className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 hover:text-foreground hover:border-white/25 transition-colors"
+                  >
+                    ⌘K search
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOpen(false);
+                      window.dispatchEvent(new Event("toggle-terminal"));
+                    }}
+                    className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 hover:text-foreground hover:border-white/25 transition-colors"
+                  >
+                    ~/terminal
+                  </button>
+                </div>
               </div>
             </motion.div>
           </>

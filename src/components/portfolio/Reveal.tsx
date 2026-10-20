@@ -9,7 +9,7 @@ const hiddenStates: Record<RevealVariant, Record<string, string | number>> = {
   left: { opacity: 0, x: -60 },
   right: { opacity: 0, x: 60 },
   scale: { opacity: 0, scale: 0.92 },
-  blur: { opacity: 0, y: 20, filter: "blur(14px)" },
+  blur: { opacity: 0, y: 20, filter: "blur(8px)" },
   clip: { opacity: 0, clipPath: "inset(0 100% 0 0)" },
 };
 
@@ -33,7 +33,7 @@ export function Reveal({
   children,
   variant = "up",
   delay = 0,
-  duration = 0.9,
+  duration = 0.55,
   className,
 }: {
   children: ReactNode;

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Nav } from "@/components/portfolio/Nav";
 import { AnalyticsBeacon } from "@/components/portfolio/AnalyticsBeacon";
@@ -9,6 +9,7 @@ import { SocialPanel } from "@/components/portfolio/SocialPanel";
 import { RightPanel } from "@/components/portfolio/RightPanel";
 import { BackgroundFX } from "@/components/portfolio/BackgroundFX";
 import { Cursor } from "@/components/portfolio/Cursor";
+import { WindowScrim } from "@/components/portfolio/WindowScrim";
 import { IntroBoot } from "@/components/portfolio/IntroBoot";
 import { Hero } from "@/components/portfolio/Hero";
 import { About } from "@/components/portfolio/About";
@@ -51,6 +52,10 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
+// Runs before paint on the client (repeats never flash the boot screen);
+// passive effect on the server, where layout effects don't run.
+const useBeforePaint = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
 function Index() {
   useHireMeEgg();
   const [bootClosing, setBootClosing] = useState(false);
@@ -66,7 +71,8 @@ function Index() {
   }, []);
 
   // Play the boot animation once per session; skip it on reloads/back-nav.
-  useEffect(() => {
+  // Checked before paint so reloads never flash the boot screen.
+  useBeforePaint(() => {
     let seen = false;
     try {
       seen = window.sessionStorage.getItem("ds-boot-seen") === "1";
@@ -79,18 +85,36 @@ function Index() {
     }
   }, []);
 
-  useReveal(bootClosing);
+  // Reveals must wait for the boot fade — otherwise they play unseen behind it.
+  useReveal(bootDone);
+
+  // The terminal's `reboot` command replays this boot sequence: clear the
+  // seen flag and remount the GRUB prompt.
+  useEffect(() => {
+    const onReboot = () => {
+      try {
+        window.sessionStorage.removeItem("ds-boot-seen");
+      } catch {
+        // ignore storage failures
+      }
+      setBootClosing(false);
+      setBootDone(false);
+    };
+    window.addEventListener("site-reboot", onReboot);
+    return () => window.removeEventListener("site-reboot", onReboot);
+  }, []);
   return (
     <main id="main-content" tabIndex={-1} className="relative min-h-screen outline-none">
       <BackgroundFX />
       <Cursor />
       <AnalyticsBeacon />
+      <WindowScrim />
       <Suspense fallback={null}>
         <CommandPalette />
       </Suspense>
       <Terminal />
       {!bootDone && <IntroBoot onCloseStart={handleBootCloseStart} onDone={handleBootDone} />}
-      <Nav />
+      {bootDone && <Nav />}
       <SocialPanel />
       <RightPanel />
       <Hero booted={bootClosing} />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { Cursor } from "@/components/portfolio/Cursor";
 import { setMatchMedia } from "../../setup";
 
@@ -35,5 +35,24 @@ describe("Cursor", () => {
     expect(document.documentElement.classList.contains("custom-cursor")).toBe(true);
     unmount();
     expect(document.documentElement.classList.contains("custom-cursor")).toBe(false);
+  });
+
+  it("renders resize glyphs with a single transform so they sit on the hotspot", () => {
+    setMatchMedia({ "(pointer: fine)": true });
+    render(<Cursor />);
+    // Resize arrow: exactly one translate (inline), no CSS `translate` property.
+    act(() => {
+      window.dispatchEvent(new CustomEvent("cursor-force", { detail: "ns" }));
+    });
+    const arrow = document.querySelector(".portfolio-cursor-pointer svg")!;
+    expect(arrow.getAttribute("class")).not.toContain("translate-x-1/2");
+    expect(arrow.getAttribute("style")).toContain("translate(-50%, -50%) rotate(0deg)");
+    // Grabbing hand: centered via the CSS `translate` property, no inline transform.
+    act(() => {
+      window.dispatchEvent(new CustomEvent("cursor-force", { detail: "grabbing" }));
+    });
+    const grab = document.querySelector(".portfolio-cursor-pointer svg")!;
+    expect(grab.getAttribute("style") ?? "").not.toContain("translate");
+    expect(grab.getAttribute("class")).toContain("-translate-x-1/2");
   });
 });
